@@ -1,0 +1,18 @@
+# Go build output
+*.exe
+*.out
+*.test
+
+# Build / binary folders
+/bin/
+build/
+
+# Dependency management
+/vendor/
+
+# IDE / Editor files
+.idea/
+.vscode/
+
+# OS junk
+.DS_Store
