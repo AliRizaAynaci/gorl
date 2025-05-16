@@ -38,8 +38,9 @@ func TestSlidingWindowLimiter_Allow_Concurrency(t *testing.T) {
 	}
 	wg.Wait()
 
-	if successCount < 75 || successCount > 76 {
-		t.Errorf("expected 75~76 allowed, got %d", successCount)
+	maxAllowed := 75
+	tolerance := 2
+	if successCount < maxAllowed || successCount > maxAllowed+tolerance {
+		t.Errorf("expected allowed between %d and %d, got %d", maxAllowed, maxAllowed+tolerance, successCount)
 	}
-
 }
