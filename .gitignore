@@ -19,3 +19,8 @@ build/
 .DS_Store
 
 .env
+
+# Logo files
+*.png
+*.jpg
+*.jpeg

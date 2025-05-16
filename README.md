@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="logo.png" alt="GoRL Logo" width="180"/>
+</p>
+
 # GoRL - High-Performance Rate Limiter Library
 
 ![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)
