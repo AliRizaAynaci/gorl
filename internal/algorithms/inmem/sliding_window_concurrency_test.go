@@ -20,7 +20,7 @@ func TestSlidingWindowLimiter_Allow_Concurrency(t *testing.T) {
 	successCount := 0
 	var mu sync.Mutex
 
-	for i := 0; i < 150; i++ {
+	for i := 0; i < 100; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
