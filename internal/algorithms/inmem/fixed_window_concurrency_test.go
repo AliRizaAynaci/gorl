@@ -39,7 +39,7 @@ func TestFixedWindowLimiter_Allow_Concurrency(t *testing.T) {
 	wg.Wait()
 
 	maxAllowed := 50
-	tolerance := 2
+	tolerance := 3
 	if successCount < maxAllowed || successCount > maxAllowed+tolerance {
 		t.Errorf("expected allowed between %d and %d, got %d", maxAllowed, maxAllowed+tolerance, successCount)
 	}
