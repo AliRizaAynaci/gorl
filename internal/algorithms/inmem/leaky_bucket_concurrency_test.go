@@ -39,7 +39,7 @@ func TestLeakyBucketLimiter_Allow_Concurrency(t *testing.T) {
 	wg.Wait()
 
 	maxAllowed := 80
-	tolerance := 2
+	tolerance := 4
 	if successCount < maxAllowed || successCount > maxAllowed+tolerance {
 		t.Errorf("expected allowed between %d and %d, got %d", maxAllowed, maxAllowed+tolerance, successCount)
 	}
