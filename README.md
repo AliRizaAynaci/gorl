@@ -2,7 +2,6 @@
 
 ![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)
 ![Go Version](https://img.shields.io/badge/go-1.24-blue.svg)
-![License](https://img.shields.io/github/license/AliRizaAynaci/gorl.svg)
 
 ## Overview
 
