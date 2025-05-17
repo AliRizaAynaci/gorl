@@ -213,10 +213,8 @@ type Storage interface {
 
 ## Roadmap
 
-* [x] JetStream KV support
+* [ ] JetStream KV support
 * [ ] Prometheus monitoring middleware
-* [ ] NATS-based backend
-* [ ] gRPC rate-limit interceptor
 
 ## Contributing
 
