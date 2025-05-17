@@ -1,4 +1,4 @@
-package algorithms
+package unit
 
 import (
 	"fmt"
@@ -8,23 +8,25 @@ import (
 	"time"
 
 	"github.com/AliRizaAynaci/gorl/core"
+	"github.com/AliRizaAynaci/gorl/internal/algorithms"
+	"github.com/AliRizaAynaci/gorl/internal/algorithms/tests/common"
 	"github.com/AliRizaAynaci/gorl/storage/inmem"
 )
 
 func TestTokenBucketLimiter_Basic(t *testing.T) {
 	store := inmem.NewInMemoryStore()
-	limiter := NewTokenBucketLimiter(core.Config{
+	limiter := algorithms.NewTokenBucketLimiter(core.Config{
 		Limit:  3,
 		Window: 2 * time.Second,
 	}, store)
-	CommonLimiterBehavior(t, limiter, "user-1", 3)
+	common.CommonLimiterBehavior(t, limiter, "user-1", 3)
 }
 
 func BenchmarkTokenBucketLimiter_SingleKey(b *testing.B) {
 	b.ReportAllocs()
 
 	store := inmem.NewInMemoryStore()
-	limiter := NewTokenBucketLimiter(core.Config{
+	limiter := algorithms.NewTokenBucketLimiter(core.Config{
 		Limit:  10000,
 		Window: time.Second,
 	}, store)
@@ -40,7 +42,7 @@ func BenchmarkTokenBucketLimiter_MultiKey(b *testing.B) {
 	b.ReportAllocs()
 
 	store := inmem.NewInMemoryStore()
-	limiter := NewTokenBucketLimiter(core.Config{
+	limiter := algorithms.NewTokenBucketLimiter(core.Config{
 		Limit:  10000,
 		Window: time.Second,
 	}, store)
@@ -53,7 +55,7 @@ func BenchmarkTokenBucketLimiter_MultiKey(b *testing.B) {
 
 func TestTokenBucketLimiter_Concurrency(t *testing.T) {
 	store := inmem.NewInMemoryStore()
-	limiter := NewTokenBucketLimiter(core.Config{
+	limiter := algorithms.NewTokenBucketLimiter(core.Config{
 		Limit:  10,
 		Window: 2 * time.Second,
 	}, store)

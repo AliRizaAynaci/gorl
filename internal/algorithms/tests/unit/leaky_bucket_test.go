@@ -1,4 +1,4 @@
-package algorithms
+package unit
 
 import (
 	"fmt"
@@ -8,37 +8,34 @@ import (
 	"time"
 
 	"github.com/AliRizaAynaci/gorl/core"
+	"github.com/AliRizaAynaci/gorl/internal/algorithms"
 	"github.com/AliRizaAynaci/gorl/storage/inmem"
 )
 
-func CommonLimiterBehavior(t *testing.T, limiter core.Limiter, key string, limit int) {
-	t.Helper()
-	for i := 0; i < limit; i++ {
+func TestLeakyBucketLimiter_Basic(t *testing.T) {
+	store := inmem.NewInMemoryStore()
+	limiter := algorithms.NewLeakyBucketLimiter(core.Config{
+		Limit:  3,
+		Window: 2 * time.Second,
+	}, store)
+	key := "test-leaky"
+	for i := 0; i < 3; i++ {
 		allowed, err := limiter.Allow(key)
-		if err != nil || !allowed {
-			t.Fatalf("expected allowed, got %v, err %v (req %d)", allowed, err, i+1)
+		if !allowed || err != nil {
+			t.Fatalf("should allow (i=%d) got allowed=%v err=%v", i, allowed, err)
 		}
 	}
 	allowed, err := limiter.Allow(key)
 	if allowed || err != nil {
-		t.Fatalf("expected denied after limit, got %v, err %v", allowed, err)
+		t.Fatalf("should deny after limit, got allowed=%v err=%v", allowed, err)
 	}
 }
 
-func TestFixedWindowLimiter_Basic(t *testing.T) {
-	store := inmem.NewInMemoryStore()
-	limiter := NewFixedWindowLimiter(core.Config{
-		Limit:  3,
-		Window: 2 * time.Second,
-	}, store)
-	CommonLimiterBehavior(t, limiter, "user-1", 3)
-}
-
-func BenchmarkFixedWindowLimiter_SingleKey(b *testing.B) {
+func BenchmarkLeakyBucketLimiter_SingleKey(b *testing.B) {
 	b.ReportAllocs()
 
 	store := inmem.NewInMemoryStore()
-	limiter := NewFixedWindowLimiter(core.Config{
+	limiter := algorithms.NewLeakyBucketLimiter(core.Config{
 		Limit:  10000,
 		Window: time.Second,
 	}, store)
@@ -50,11 +47,11 @@ func BenchmarkFixedWindowLimiter_SingleKey(b *testing.B) {
 	}
 }
 
-func BenchmarkFixedWindowLimiter_MultiKey(b *testing.B) {
+func BenchmarkLeakyBucketLimiter_MultiKey(b *testing.B) {
 	b.ReportAllocs()
 
 	store := inmem.NewInMemoryStore()
-	limiter := NewFixedWindowLimiter(core.Config{
+	limiter := algorithms.NewLeakyBucketLimiter(core.Config{
 		Limit:  10000,
 		Window: time.Second,
 	}, store)
@@ -65,13 +62,13 @@ func BenchmarkFixedWindowLimiter_MultiKey(b *testing.B) {
 	}
 }
 
-func TestFixedWindowLimiter_Concurrency(t *testing.T) {
+func TestLeakyBucketLimiter_Concurrency(t *testing.T) {
 	store := inmem.NewInMemoryStore()
-	limiter := NewFixedWindowLimiter(core.Config{
+	limiter := algorithms.NewLeakyBucketLimiter(core.Config{
 		Limit:  10,
 		Window: 2 * time.Second,
 	}, store)
-	key := "user-concurrent-fx"
+	key := "user-concurrent-lb"
 
 	var wg sync.WaitGroup
 	var allowedCount int32
@@ -91,7 +88,9 @@ func TestFixedWindowLimiter_Concurrency(t *testing.T) {
 		}()
 	}
 	wg.Wait()
-	if allowedCount < 9 || allowedCount > 15 {
-		t.Errorf("concurrency allowedCount = %d, expected ~10", allowedCount)
+	maxAllowed := 10
+	tolerance := 3
+	if int(allowedCount) < maxAllowed || int(allowedCount) > maxAllowed+tolerance {
+		t.Errorf("concurrency error: allowedCount = %d, expected 10", allowedCount)
 	}
 }
