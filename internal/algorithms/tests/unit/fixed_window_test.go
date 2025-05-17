@@ -1,4 +1,4 @@
-package algorithms
+package unit
 
 import (
 	"fmt"
@@ -8,23 +8,25 @@ import (
 	"time"
 
 	"github.com/AliRizaAynaci/gorl/core"
+	"github.com/AliRizaAynaci/gorl/internal/algorithms"
+	"github.com/AliRizaAynaci/gorl/internal/algorithms/tests/common"
 	"github.com/AliRizaAynaci/gorl/storage/inmem"
 )
 
-func TestSlidingWindowLimiter_Basic(t *testing.T) {
+func TestFixedWindowLimiter_Basic(t *testing.T) {
 	store := inmem.NewInMemoryStore()
-	limiter := NewSlidingWindowLimiter(core.Config{
+	limiter := algorithms.NewFixedWindowLimiter(core.Config{
 		Limit:  3,
 		Window: 2 * time.Second,
 	}, store)
-	CommonLimiterBehavior(t, limiter, "user-1", 3)
+	common.CommonLimiterBehavior(t, limiter, "user-1", 3)
 }
 
-func BenchmarkSlidingWindowLimiter_SingleKey(b *testing.B) {
+func BenchmarkFixedWindowLimiter_SingleKey(b *testing.B) {
 	b.ReportAllocs()
 
 	store := inmem.NewInMemoryStore()
-	limiter := NewSlidingWindowLimiter(core.Config{
+	limiter := algorithms.NewFixedWindowLimiter(core.Config{
 		Limit:  10000,
 		Window: time.Second,
 	}, store)
@@ -36,11 +38,11 @@ func BenchmarkSlidingWindowLimiter_SingleKey(b *testing.B) {
 	}
 }
 
-func BenchmarkSlidingWindowLimiter_MultiKey(b *testing.B) {
+func BenchmarkFixedWindowLimiter_MultiKey(b *testing.B) {
 	b.ReportAllocs()
 
 	store := inmem.NewInMemoryStore()
-	limiter := NewSlidingWindowLimiter(core.Config{
+	limiter := algorithms.NewFixedWindowLimiter(core.Config{
 		Limit:  10000,
 		Window: time.Second,
 	}, store)
@@ -51,13 +53,13 @@ func BenchmarkSlidingWindowLimiter_MultiKey(b *testing.B) {
 	}
 }
 
-func TestSlidingWindowLimiter_Concurrency(t *testing.T) {
+func TestFixedWindowLimiter_Concurrency(t *testing.T) {
 	store := inmem.NewInMemoryStore()
-	limiter := NewSlidingWindowLimiter(core.Config{
+	limiter := algorithms.NewFixedWindowLimiter(core.Config{
 		Limit:  10,
 		Window: 2 * time.Second,
 	}, store)
-	key := "user-concurrent-sw"
+	key := "user-concurrent-fx"
 
 	var wg sync.WaitGroup
 	var allowedCount int32
@@ -77,7 +79,7 @@ func TestSlidingWindowLimiter_Concurrency(t *testing.T) {
 		}()
 	}
 	wg.Wait()
-	if allowedCount < 8 || allowedCount > 15 {
-		t.Errorf("concurrency error: allowedCount = %d, expected 10", allowedCount)
+	if allowedCount < 9 || allowedCount > 15 {
+		t.Errorf("concurrency allowedCount = %d, expected ~10", allowedCount)
 	}
 }
