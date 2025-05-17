@@ -49,9 +49,12 @@ func (l *LeakyBucketLimiter) Allow(key string) (bool, error) {
 
 		if leakedAmount > 0 {
 			currentWaterLevel = math.Max(0, currentWaterLevel-leakedAmount)
+			currentWaterLevel = math.Floor(currentWaterLevel)
 			currentLastLeak = currentLastLeak + leakedAmount/leakRate
 		}
 	}
+
+	currentWaterLevel = math.Floor(currentWaterLevel)
 
 	allowed := currentWaterLevel < float64(l.limit)
 
