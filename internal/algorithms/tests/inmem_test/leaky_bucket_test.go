@@ -18,7 +18,18 @@ func TestLeakyBucketLimiter_Basic(t *testing.T) {
 		Limit:  3,
 		Window: 2 * time.Second,
 	}, store)
-	CommonLimiterBehavior(t, limiter, "user-1", 3)
+
+	for i := 0; i < 3; i++ {
+		allowed, err := limiter.Allow("user-1")
+		if err != nil || !allowed {
+			t.Fatalf("expected allowed, got %v, err %v (req %d)", allowed, err, i+1)
+		}
+	}
+
+	allowed, err := limiter.Allow("user-1")
+	if err != nil || allowed {
+		t.Fatalf("expected denied after limit, got %v, err %v", allowed, err)
+	}
 }
 
 func BenchmarkLeakyBucketLimiter_SingleKey(b *testing.B) {
