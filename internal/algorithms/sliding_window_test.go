@@ -1,4 +1,4 @@
-package inmem_test
+package algorithms
 
 import (
 	"fmt"
@@ -8,13 +8,12 @@ import (
 	"time"
 
 	"github.com/AliRizaAynaci/gorl/core"
-	"github.com/AliRizaAynaci/gorl/internal/algorithms"
 	"github.com/AliRizaAynaci/gorl/storage/inmem"
 )
 
 func TestSlidingWindowLimiter_Basic(t *testing.T) {
 	store := inmem.NewInMemoryStore()
-	limiter := algorithms.NewSlidingWindowLimiter(core.Config{
+	limiter := NewSlidingWindowLimiter(core.Config{
 		Limit:  3,
 		Window: 2 * time.Second,
 	}, store)
@@ -25,7 +24,7 @@ func BenchmarkSlidingWindowLimiter_SingleKey(b *testing.B) {
 	b.ReportAllocs()
 
 	store := inmem.NewInMemoryStore()
-	limiter := algorithms.NewSlidingWindowLimiter(core.Config{
+	limiter := NewSlidingWindowLimiter(core.Config{
 		Limit:  10000,
 		Window: time.Second,
 	}, store)
@@ -41,7 +40,7 @@ func BenchmarkSlidingWindowLimiter_MultiKey(b *testing.B) {
 	b.ReportAllocs()
 
 	store := inmem.NewInMemoryStore()
-	limiter := algorithms.NewSlidingWindowLimiter(core.Config{
+	limiter := NewSlidingWindowLimiter(core.Config{
 		Limit:  10000,
 		Window: time.Second,
 	}, store)
@@ -54,7 +53,7 @@ func BenchmarkSlidingWindowLimiter_MultiKey(b *testing.B) {
 
 func TestSlidingWindowLimiter_Concurrency(t *testing.T) {
 	store := inmem.NewInMemoryStore()
-	limiter := algorithms.NewSlidingWindowLimiter(core.Config{
+	limiter := NewSlidingWindowLimiter(core.Config{
 		Limit:  10,
 		Window: 2 * time.Second,
 	}, store)

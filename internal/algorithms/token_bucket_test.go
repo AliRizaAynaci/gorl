@@ -1,4 +1,4 @@
-package redis_test
+package algorithms
 
 import (
 	"fmt"
@@ -8,31 +8,26 @@ import (
 	"time"
 
 	"github.com/AliRizaAynaci/gorl/core"
-	"github.com/AliRizaAynaci/gorl/internal/algorithms"
-	"github.com/AliRizaAynaci/gorl/storage/redis"
+	"github.com/AliRizaAynaci/gorl/storage/inmem"
 )
 
 func TestTokenBucketLimiter_Basic(t *testing.T) {
-	store := redis.NewRedisStore("redis://localhost:6379/0")
-
-	cfg := core.Config{
+	store := inmem.NewInMemoryStore()
+	limiter := NewTokenBucketLimiter(core.Config{
 		Limit:  3,
 		Window: 2 * time.Second,
-	}
-	limiter := algorithms.NewTokenBucketLimiter(cfg, store)
-	CommonLimiterBehavior(t, limiter, "user-4", 3)
+	}, store)
+	CommonLimiterBehavior(t, limiter, "user-1", 3)
 }
 
 func BenchmarkTokenBucketLimiter_SingleKey(b *testing.B) {
 	b.ReportAllocs()
 
-	store := redis.NewRedisStore("redis://localhost:6379/0")
-
-	cfg := core.Config{
+	store := inmem.NewInMemoryStore()
+	limiter := NewTokenBucketLimiter(core.Config{
 		Limit:  10000,
 		Window: time.Second,
-	}
-	limiter := algorithms.NewTokenBucketLimiter(cfg, store)
+	}, store)
 	key := "bench-user"
 
 	b.ResetTimer()
@@ -44,14 +39,11 @@ func BenchmarkTokenBucketLimiter_SingleKey(b *testing.B) {
 func BenchmarkTokenBucketLimiter_MultiKey(b *testing.B) {
 	b.ReportAllocs()
 
-	store := redis.NewRedisStore("redis://localhost:6379/0")
-
-	cfg := core.Config{
+	store := inmem.NewInMemoryStore()
+	limiter := NewTokenBucketLimiter(core.Config{
 		Limit:  10000,
 		Window: time.Second,
-	}
-	limiter := algorithms.NewTokenBucketLimiter(cfg, store)
-
+	}, store)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		key := fmt.Sprintf("user-%d", i%1000)
@@ -60,13 +52,11 @@ func BenchmarkTokenBucketLimiter_MultiKey(b *testing.B) {
 }
 
 func TestTokenBucketLimiter_Concurrency(t *testing.T) {
-	store := redis.NewRedisStore("redis://localhost:6379/0")
-
-	cfg := core.Config{
+	store := inmem.NewInMemoryStore()
+	limiter := NewTokenBucketLimiter(core.Config{
 		Limit:  10,
 		Window: 2 * time.Second,
-	}
-	limiter := algorithms.NewTokenBucketLimiter(cfg, store)
+	}, store)
 	key := "user-concurrent"
 
 	var wg sync.WaitGroup
@@ -77,7 +67,6 @@ func TestTokenBucketLimiter_Concurrency(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			time.Sleep(time.Millisecond * 2)
 			allowed, err := limiter.Allow(key)
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
