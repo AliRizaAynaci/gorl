@@ -61,7 +61,7 @@ func TestTokenBucketLimiter_Concurrency(t *testing.T) {
 
 	var wg sync.WaitGroup
 	var allowedCount int32
-	workerCount := 10
+	workerCount := 100
 
 	for i := 0; i < workerCount; i++ {
 		wg.Add(1)
