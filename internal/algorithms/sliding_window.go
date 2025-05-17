@@ -19,6 +19,7 @@ func NewSlidingWindowLimiter(cfg core.Config, store storage.Storage) core.Limite
 		limit:  cfg.Limit,
 		window: cfg.Window,
 		store:  store,
+		prefix: "gorl:sw",
 	}
 }
 
