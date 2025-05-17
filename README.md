@@ -91,7 +91,7 @@ docker run --name redis-limiter -p 6379:6379 -d redis
 
 ## Benchmarks
 
-Benchmarks run on AMD Ryzen 7 4800H. See `benchmarks/` for detailed reports.
+Benchmarks run on AMD Ryzen 7 4800H.
 
 | Algorithm      | In-Memory (ns/op) | Redis (ns/op) |
 | -------------- | ----------------- | ------------- |
