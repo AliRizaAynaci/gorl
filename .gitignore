@@ -3,6 +3,8 @@
 *.out
 *.test
 coverage
+coverage.html
+
 
 # Build / binary folders
 /bin/

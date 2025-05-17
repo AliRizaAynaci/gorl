@@ -228,5 +228,5 @@ Please review our [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 ## License
 
-Distributed under the MIT License. See `LICENSE` for details.
+Distributed under the MIT License. See [LICENSE](LICENSE) for details.
 
