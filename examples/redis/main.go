@@ -10,9 +10,9 @@ import (
 
 func main() {
 	limiter, err := gorl.New(core.Config{
-		Strategy: core.SlidingWindow,
+		Strategy: core.LeakyBucket,
 		KeyBy:    core.KeyByAPIKey,
-		Limit:    3,
+		Limit:    4,
 		Window:   10 * time.Second,
 		RedisURL: "redis://localhost:6379/0",
 	})
@@ -20,9 +20,9 @@ func main() {
 		panic(err)
 	}
 
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 10; i++ {
 		allowed, err := limiter.Allow("example-api-key")
 		fmt.Printf("Request #%d: allowed=%v, err=%v\n", i+1, allowed, err)
-		time.Sleep(2 * time.Second)
+		time.Sleep(1 * time.Second)
 	}
 }
