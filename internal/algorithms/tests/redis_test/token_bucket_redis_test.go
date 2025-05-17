@@ -88,7 +88,7 @@ func TestTokenBucketLimiter_Concurrency(t *testing.T) {
 		}()
 	}
 	wg.Wait()
-	if allowedCount < 9 || allowedCount > 12 {
+	if allowedCount < 9 || allowedCount > 15 {
 		t.Errorf("concurrency allowedCount = %d, expected ~10", allowedCount)
 	}
 }

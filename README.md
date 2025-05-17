@@ -2,6 +2,10 @@
   <img src="logo.png" alt="GoRL Logo" width="180"/>
 </p>
 
+<p align="center">
+  <img src="logo.png" alt="GoRL Logo" width="180"/>
+</p>
+
 # GoRL - High-Performance Rate Limiter Library
 
 ![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)
@@ -123,25 +127,97 @@ docker run --name redis-limiter -p 6379:6379 -d redis
 
 ## Benchmark Results
 
-### In-memory Performance
+### In-memory Benchmark Results
 
-| Algorithm          | Operations/sec | Latency per op | Allocations |
-| ------------------ | -------------- | -------------- | ----------- |
-| **Fixed Window**   | 15,321,034     | 77.12 ns/op    | 0 allocs/op |
-| **Leaky Bucket**   | 12,973,014     | 92.89 ns/op    | 0 allocs/op |
-| **Sliding Window** | 244,675        | 5,424 ns/op    | 0 allocs/op |
-| **Token Bucket**   | 13,772,462     | 87.39 ns/op    | 0 allocs/op |
+| Algorithm              | Operations | Avg Time per Op (ns) | Bytes per Op | Allocations per Op |
+| ---------------------- | ---------- | -------------------- | ------------ | ------------------ |
+| Fixed Window Limiter   | 696 ops    | 1,855,605            | 362          | 7                  |
+| Fixed Window Limiter   | 639 ops    | 1,643,390            | 376          | 8                  |
+| Leaky Bucket Limiter   | 513 ops    | 2,400,053            | 1,746        | 30                 |
+| Leaky Bucket Limiter   | 475 ops    | 2,480,942            | 1,696        | 27                 |
+| Sliding Window Limiter | 376 ops    | 2,880,348            | 21,283       | 312                |
+| Sliding Window Limiter | 580 ops    | 2,210,054            | 654          | 16                 |
+| Token Bucket Limiter   | 482 ops    | 2,183,965            | 1,763        | 31                 |
+| Token Bucket Limiter   | 547 ops    | 2,163,840            | 1,692        | 27                 |
 
-### Redis-based Performance
+### Redis Benchmark Results
 
-| Algorithm          | Operations/sec | Latency per op | Allocations  |
-| ------------------ | -------------- | -------------- | ------------ |
-| **Fixed Window**   | 8,180          | 138,133 ns/op  | 9 allocs/op  |
-| **Leaky Bucket**   | 6,999          | 169,325 ns/op  | 13 allocs/op |
-| **Sliding Window** | 7,101          | 154,330 ns/op  | 31 allocs/op |
-| **Token Bucket**   | 7,183          | 170,546 ns/op  | 14 allocs/op |
+| Algorithm              | Operations | Avg Time per Op (ns) | Bytes per Op | Allocations per Op |
+| ---------------------- | ---------- | -------------------- | ------------ | ------------------ |
+| Fixed Window Limiter   | 772 ops    | 1,520,749            | 360          | 7                  |
+| Fixed Window Limiter   | 795 ops    | 1,456,494            | 370          | 8                  |
+| Leaky Bucket Limiter   | 572 ops    | 2,165,656            | 1,742        | 30                 |
+| Leaky Bucket Limiter   | 553 ops    | 2,160,602            | 1,690        | 27                 |
+| Sliding Window Limiter | 511 ops    | 2,476,893            | 25,085       | 379                |
+| Sliding Window Limiter | 501 ops    | 2,129,440            | 658          | 17                 |
+| Token Bucket Limiter   | 524 ops    | 2,227,303            | 1,763        | 31                 |
+| Token Bucket Limiter   | 525 ops    | 2,204,126            | 1,694        | 27                 |
 
-Benchmarks conducted on AMD EPYC 7763 CPU (64-core).
+Benchmarks conducted on AMD Ryzen 7 4800H CPU.
+
+## Advanced Usage: Storage Layer
+
+GoRL uses a pluggable storage layer. You can use the built-in in-memory or Redis backends, or bring your own by implementing the `storage.Storage` interface.
+
+### Built-in Store Implementations
+
+```go
+import (
+    "github.com/AliRizaAynaci/gorl/core"
+    "github.com/AliRizaAynaci/gorl/internal/algorithms"
+    "github.com/AliRizaAynaci/gorl/storage/inmem"
+    "github.com/AliRizaAynaci/gorl/storage/redis"
+)
+```
+
+#### In-memory:
+
+```go
+store := inmem.NewInMemoryStore()
+```
+
+#### Redis:
+
+```go
+store := redis.NewRedisStore("redis://localhost:6379/0")
+```
+
+You can then pass your custom store manually with a specific limiter algorithm:
+
+```go
+limiter := algorithms.NewFixedWindowLimiter(core.Config{
+    Limit:  5,
+    Window: 10 * time.Second,
+}, store)
+```
+
+> Note: If you’re using the top-level `gorl.New()` function, it automatically selects Redis or In-Memory store based on `core.Config.RedisURL`.
+
+### Writing Your Own Store Backend
+
+To implement a custom backend (e.g., DynamoDB, NATS, SQL), implement the following interface:
+
+```go
+type Storage interface {
+    Incr(key string, ttl time.Duration) (float64, error)
+    Get(key string) (float64, error)
+    Set(key string, val float64, ttl time.Duration) error
+
+    AppendList(key string, value int64, ttl time.Duration) error
+    GetList(key string) ([]int64, error)
+    TrimList(key string, count int) error
+
+    ZAdd(key string, score float64, member int64, ttl time.Duration) error
+    ZRemRangeByScore(key string, min, max float64) error
+    ZCard(key string) (int64, error)
+    ZRangeByScore(key string, min, max float64) ([]int64, error)
+
+    HMSet(key string, fields map[string]float64, ttl time.Duration) error
+    HMGet(key string, fields ...string) (map[string]float64, error)
+}
+```
+
+This design gives you full control over how data is stored, enabling integration with your own distributed cache, message broker, or database.
 
 ## Contributing
 

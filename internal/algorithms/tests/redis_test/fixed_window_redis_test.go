@@ -1,7 +1,9 @@
 package redis_test
 
 import (
+	"context"
 	"fmt"
+	"os"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -27,6 +29,12 @@ func CommonLimiterBehavior(t *testing.T, limiter core.Limiter, key string, limit
 	if allowedCount > limit+1 {
 		t.Fatalf("allowedCount %d exceeds limit %d", allowedCount, limit)
 	}
+}
+
+func TestMain(m *testing.M) {
+	store := redis.NewRedisStore("redis://localhost:6379/0")
+	_ = store.(*redis.RedisStore).Client().FlushDB(context.Background())
+	os.Exit(m.Run())
 }
 
 func TestFixedWindowLimiter_Basic(t *testing.T) {
