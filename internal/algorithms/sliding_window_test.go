@@ -57,7 +57,7 @@ func TestSlidingWindowLimiter_Concurrency(t *testing.T) {
 		Limit:  10,
 		Window: 2 * time.Second,
 	}, store)
-	key := "user-concurrent"
+	key := "user-concurrent-sw"
 
 	var wg sync.WaitGroup
 	var allowedCount int32
