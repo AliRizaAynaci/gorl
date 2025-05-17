@@ -19,6 +19,7 @@ func NewTokenBucketLimiter(cfg core.Config, store storage.Storage) core.Limiter 
 		limit:  cfg.Limit,
 		window: cfg.Window,
 		store:  store,
+		prefix: "gorl:tb",
 	}
 }
 
