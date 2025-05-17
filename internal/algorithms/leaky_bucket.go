@@ -1,6 +1,7 @@
 package algorithms
 
 import (
+	"math"
 	"sync"
 	"time"
 
@@ -47,7 +48,7 @@ func (l *LeakyBucketLimiter) Allow(key string) (bool, error) {
 		leakedAmount := elapsed * leakRate
 
 		if leakedAmount > 0 {
-			currentWaterLevel = maxFloat(0, currentWaterLevel-leakedAmount)
+			currentWaterLevel = math.Max(0, currentWaterLevel-leakedAmount)
 			currentLastLeak = currentLastLeak + leakedAmount/leakRate
 		}
 	}
@@ -65,11 +66,4 @@ func (l *LeakyBucketLimiter) Allow(key string) (bool, error) {
 	_ = l.store.HMSet(storageKey, fields, l.window)
 
 	return allowed, nil
-}
-
-func maxFloat(a, b float64) float64 {
-	if a > b {
-		return a
-	}
-	return b
 }

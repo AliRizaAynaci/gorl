@@ -17,17 +17,16 @@ func TestLeakyBucketLimiter_Basic(t *testing.T) {
 		Limit:  3,
 		Window: 2 * time.Second,
 	}, store)
-
+	key := "test-leaky"
 	for i := 0; i < 3; i++ {
-		allowed, err := limiter.Allow("user-1")
-		if err != nil || !allowed {
-			t.Fatalf("expected allowed, got %v, err %v (req %d)", allowed, err, i+1)
+		allowed, err := limiter.Allow(key)
+		if !allowed || err != nil {
+			t.Fatalf("should allow (i=%d) got allowed=%v err=%v", i, allowed, err)
 		}
 	}
-
-	allowed, err := limiter.Allow("user-1")
-	if err != nil || allowed {
-		t.Fatalf("expected denied after limit, got %v, err %v", allowed, err)
+	allowed, err := limiter.Allow(key)
+	if allowed || err != nil {
+		t.Fatalf("should deny after limit, got allowed=%v err=%v", allowed, err)
 	}
 }
 
