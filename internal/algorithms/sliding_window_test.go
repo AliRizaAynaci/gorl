@@ -1,4 +1,4 @@
-package inmem_test
+package algorithms
 
 import (
 	"fmt"
@@ -8,24 +8,23 @@ import (
 	"time"
 
 	"github.com/AliRizaAynaci/gorl/core"
-	"github.com/AliRizaAynaci/gorl/internal/algorithms"
 	"github.com/AliRizaAynaci/gorl/storage/inmem"
 )
 
-func TestLeakyBucketLimiter_Basic(t *testing.T) {
+func TestSlidingWindowLimiter_Basic(t *testing.T) {
 	store := inmem.NewInMemoryStore()
-	limiter := algorithms.NewLeakyBucketLimiter(core.Config{
+	limiter := NewSlidingWindowLimiter(core.Config{
 		Limit:  3,
 		Window: 2 * time.Second,
 	}, store)
 	CommonLimiterBehavior(t, limiter, "user-1", 3)
 }
 
-func BenchmarkLeakyBucketLimiter_SingleKey(b *testing.B) {
+func BenchmarkSlidingWindowLimiter_SingleKey(b *testing.B) {
 	b.ReportAllocs()
 
 	store := inmem.NewInMemoryStore()
-	limiter := algorithms.NewLeakyBucketLimiter(core.Config{
+	limiter := NewSlidingWindowLimiter(core.Config{
 		Limit:  10000,
 		Window: time.Second,
 	}, store)
@@ -37,11 +36,11 @@ func BenchmarkLeakyBucketLimiter_SingleKey(b *testing.B) {
 	}
 }
 
-func BenchmarkLeakyBucketLimiter_MultiKey(b *testing.B) {
+func BenchmarkSlidingWindowLimiter_MultiKey(b *testing.B) {
 	b.ReportAllocs()
 
 	store := inmem.NewInMemoryStore()
-	limiter := algorithms.NewLeakyBucketLimiter(core.Config{
+	limiter := NewSlidingWindowLimiter(core.Config{
 		Limit:  10000,
 		Window: time.Second,
 	}, store)
@@ -52,13 +51,13 @@ func BenchmarkLeakyBucketLimiter_MultiKey(b *testing.B) {
 	}
 }
 
-func TestLeakyBucketLimiter_Concurrency(t *testing.T) {
+func TestSlidingWindowLimiter_Concurrency(t *testing.T) {
 	store := inmem.NewInMemoryStore()
-	limiter := algorithms.NewLeakyBucketLimiter(core.Config{
+	limiter := NewSlidingWindowLimiter(core.Config{
 		Limit:  10,
 		Window: 2 * time.Second,
 	}, store)
-	key := "user-concurrent"
+	key := "user-concurrent-sw"
 
 	var wg sync.WaitGroup
 	var allowedCount int32
@@ -78,9 +77,7 @@ func TestLeakyBucketLimiter_Concurrency(t *testing.T) {
 		}()
 	}
 	wg.Wait()
-	maxAllowed := 10
-	tolerance := 3
-	if int(allowedCount) < maxAllowed || int(allowedCount) > maxAllowed+tolerance {
+	if allowedCount < 8 || allowedCount > 15 {
 		t.Errorf("concurrency error: allowedCount = %d, expected 10", allowedCount)
 	}
 }

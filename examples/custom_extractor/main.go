@@ -14,7 +14,7 @@ func main() {
 	}
 
 	limiter, _ := gorl.New(core.Config{
-		Strategy:           core.FixedWindow,
+		Strategy:           core.LeakyBucket,
 		KeyBy:              core.KeyByCustom,
 		Limit:              2,
 		Window:             5 * time.Second,

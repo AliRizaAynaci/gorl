@@ -1,6 +1,7 @@
 package algorithms
 
 import (
+	"math"
 	"sync"
 	"time"
 
@@ -30,46 +31,42 @@ func (l *LeakyBucketLimiter) Allow(key string) (bool, error) {
 	defer l.mu.Unlock()
 
 	storageKey := l.prefix + ":" + key
-	now := float64(time.Now().UnixNano())
+	now := time.Now().UnixNano()
 
-	state, err := l.store.HMGet(storageKey, "water_level", "last_leak")
+	state, _ := l.store.HMGet(storageKey, "water_level", "last_leak")
 
-	var currentWaterLevel, currentLastLeak float64
-	if err != nil || state["last_leak"] == 0 {
-		currentWaterLevel = 0
-		currentLastLeak = now
+	var waterLevel int
+	var lastLeak int64
+	if state["last_leak"] == 0 {
+		waterLevel = 0
+		lastLeak = now
 	} else {
-		currentWaterLevel = state["water_level"]
-		currentLastLeak = state["last_leak"]
+		waterLevel = int(state["water_level"])
+		lastLeak = int64(state["last_leak"])
 
-		elapsed := now - currentLastLeak
-		leakRate := float64(l.limit) / float64(l.window.Nanoseconds())
-		leakedAmount := elapsed * leakRate
+		elapsed := now - lastLeak
+		tokensPerNano := float64(l.limit) / float64(l.window.Nanoseconds())
+		leakedTokens := int64(math.Floor(float64(elapsed) * tokensPerNano))
 
-		if leakedAmount > 0 {
-			currentWaterLevel = maxFloat(0, currentWaterLevel-leakedAmount)
-			currentLastLeak = currentLastLeak + leakedAmount/leakRate
+		if leakedTokens > 0 {
+			waterLevel -= int(leakedTokens)
+			if waterLevel < 0 {
+				waterLevel = 0
+			}
+			lastLeak += int64(math.Floor(float64(leakedTokens) / tokensPerNano))
 		}
 	}
 
-	allowed := currentWaterLevel < float64(l.limit)
-
+	allowed := waterLevel < l.limit
 	if allowed {
-		currentWaterLevel++
+		waterLevel++
 	}
 
 	fields := map[string]float64{
-		"water_level": currentWaterLevel,
-		"last_leak":   currentLastLeak,
+		"water_level": float64(waterLevel),
+		"last_leak":   float64(lastLeak),
 	}
 	_ = l.store.HMSet(storageKey, fields, l.window)
 
 	return allowed, nil
-}
-
-func maxFloat(a, b float64) float64 {
-	if a > b {
-		return a
-	}
-	return b
 }

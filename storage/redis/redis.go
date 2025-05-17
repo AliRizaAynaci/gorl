@@ -154,3 +154,7 @@ func (s *RedisStore) HMGet(key string, fields ...string) (map[string]float64, er
 	}
 	return res, nil
 }
+
+func (s *RedisStore) Client() *goredis.Client {
+	return s.client
+}
