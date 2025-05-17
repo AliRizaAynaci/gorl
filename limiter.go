@@ -2,36 +2,34 @@ package gorl
 
 import (
 	"github.com/AliRizaAynaci/gorl/core"
-	inmem "github.com/AliRizaAynaci/gorl/internal/algorithms/inmem"
-	redislimiter "github.com/AliRizaAynaci/gorl/internal/algorithms/redis"
+	"github.com/AliRizaAynaci/gorl/internal/algorithms"
+	"github.com/AliRizaAynaci/gorl/storage"
+	"github.com/AliRizaAynaci/gorl/storage/inmem"
+	"github.com/AliRizaAynaci/gorl/storage/redis"
 )
 
-// In-memory strategy registry
-var inMemRegistry = map[core.StrategyType]func(core.Config) core.Limiter{
-	core.TokenBucket:   inmem.NewTokenBucketLimiter,
-	core.FixedWindow:   inmem.NewFixedWindowLimiter,
-	core.SlidingWindow: inmem.NewSlidingWindowLimiter,
-	core.LeakyBucket:   inmem.NewLeakyBucketLimiter,
+var strategyRegistry = map[core.StrategyType]func(core.Config, storage.Storage) core.Limiter{
+	core.FixedWindow:   algorithms.NewFixedWindowLimiter,
+	core.TokenBucket:   algorithms.NewTokenBucketLimiter,
+	core.SlidingWindow: algorithms.NewSlidingWindowLimiter,
+	core.LeakyBucket:   algorithms.NewLeakyBucketLimiter,
 }
 
-// Redis strategy registry
-var redisRegistry = map[core.StrategyType]func(core.Config) core.Limiter{
-	core.TokenBucket:   redislimiter.NewTokenBucketLimiter,
-	core.FixedWindow:   redislimiter.NewFixedWindowLimiter,
-	core.SlidingWindow: redislimiter.NewSlidingWindowLimiter,
-	core.LeakyBucket:   redislimiter.NewLeakyBucketLimiter,
-}
-
+// New creates a new rate limiter instance using the specified algorithm and storage backend.
+// If cfg.RedisURL is provided, Redis is used as the storage backend. Otherwise, an in-memory backend is used.
+// Supported strategies: FixedWindow, TokenBucket, SlidingWindow, LeakyBucket.
 func New(cfg core.Config) (core.Limiter, error) {
-	var registry map[core.StrategyType]func(core.Config) core.Limiter
+	var store storage.Storage
+
 	if cfg.RedisURL != "" {
-		registry = redisRegistry
+		store = redis.NewRedisStore(cfg.RedisURL)
 	} else {
-		registry = inMemRegistry
+		store = inmem.NewInMemoryStore()
 	}
 
-	if constructor, ok := registry[cfg.Strategy]; ok {
-		return constructor(cfg), nil
+	constructor, ok := strategyRegistry[cfg.Strategy]
+	if !ok {
+		return nil, core.ErrUnknownStrategy
 	}
-	return nil, core.ErrUnknownStrategy
+	return constructor(cfg, store), nil
 }

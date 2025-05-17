@@ -10,15 +10,16 @@ import (
 
 func main() {
 	limiter, _ := gorl.New(core.Config{
-		Strategy: core.TokenBucket,
+		Strategy: core.LeakyBucket,
 		KeyBy:    core.KeyByIP,
-		Limit:    5,
-		Window:   10 * time.Second,
+		Limit:    3,
+		Window:   5 * time.Second,
 	})
 
-	for i := 0; i < 10; i++ {
+	for i := 1; i <= 15; i++ {
 		allowed, err := limiter.Allow("127.0.0.1")
-		fmt.Printf("Request #%d: allowed=%v, err=%v\n", i+1, allowed, err)
-		time.Sleep(1 * time.Second)
+		fmt.Printf("Request #%d: allowed=%v, err=%v\n", i, allowed, err)
+		time.Sleep(500 * time.Millisecond)
 	}
+
 }
