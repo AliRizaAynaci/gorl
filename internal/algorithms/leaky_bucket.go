@@ -9,14 +9,17 @@ import (
 	"github.com/AliRizaAynaci/gorl/storage"
 )
 
+// LeakyBucketLimiter implements the leaky bucket algorithm using minimal Storage API (Get/Set only).
+// State is stored in two separate keys per user: water level and last leak timestamp.
 type LeakyBucketLimiter struct {
-	limit  int
-	window time.Duration
+	limit  int           // maximum water capacity
+	window time.Duration // leak window duration
 	store  storage.Storage
-	prefix string
-	mu     sync.Mutex
+	prefix string     // key prefix, e.g. "gorl:lb"
+	mu     sync.Mutex // ensure atomicity in-memory; Redis backend handles atomic ops
 }
 
+// NewLeakyBucketLimiter constructs a new LeakyBucketLimiter.
 func NewLeakyBucketLimiter(cfg core.Config, store storage.Storage) core.Limiter {
 	return &LeakyBucketLimiter{
 		limit:  cfg.Limit,
@@ -26,47 +29,60 @@ func NewLeakyBucketLimiter(cfg core.Config, store storage.Storage) core.Limiter 
 	}
 }
 
+// Allow checks and updates water level, allowing requests at a steady rate.
 func (l *LeakyBucketLimiter) Allow(key string) (bool, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	storageKey := l.prefix + ":" + key
 	now := time.Now().UnixNano()
+	waterKey := l.prefix + ":water:" + key
+	leakKey := l.prefix + ":leak:" + key
 
-	state, _ := l.store.HMGet(storageKey, "water_level", "last_leak")
+	// Load current state
+	waterVal, err := l.store.Get(waterKey)
+	if err != nil {
+		return false, err
+	}
+	waterLevel := int(waterVal)
 
-	var waterLevel int
-	var lastLeak int64
-	if state["last_leak"] == 0 {
+	lastLeakVal, err := l.store.Get(leakKey)
+	if err != nil {
+		return false, err
+	}
+	lastLeak := int64(lastLeakVal)
+
+	// Initialize if first run
+	if lastLeak == 0 {
 		waterLevel = 0
 		lastLeak = now
 	} else {
-		waterLevel = int(state["water_level"])
-		lastLeak = int64(state["last_leak"])
-
+		// Compute leaked tokens since last leak
 		elapsed := now - lastLeak
 		tokensPerNano := float64(l.limit) / float64(l.window.Nanoseconds())
-		leakedTokens := int64(math.Floor(float64(elapsed) * tokensPerNano))
-
-		if leakedTokens > 0 {
-			waterLevel -= int(leakedTokens)
+		leaked := int64(math.Floor(float64(elapsed) * tokensPerNano))
+		if leaked > 0 {
+			waterLevel -= int(leaked)
 			if waterLevel < 0 {
 				waterLevel = 0
 			}
-			lastLeak += int64(math.Floor(float64(leakedTokens) / tokensPerNano))
+			// Advance lastLeak based on consumed time
+			lastLeak += int64(math.Floor(float64(leaked) / tokensPerNano))
 		}
 	}
 
+	// Determine allowance and update water level
 	allowed := waterLevel < l.limit
 	if allowed {
 		waterLevel++
 	}
 
-	fields := map[string]float64{
-		"water_level": float64(waterLevel),
-		"last_leak":   float64(lastLeak),
+	// Persist updated state
+	if err := l.store.Set(waterKey, float64(waterLevel), l.window); err != nil {
+		return false, err
 	}
-	_ = l.store.HMSet(storageKey, fields, l.window)
+	if err := l.store.Set(leakKey, float64(lastLeak), l.window); err != nil {
+		return false, err
+	}
 
 	return allowed, nil
 }

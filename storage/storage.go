@@ -2,24 +2,18 @@ package storage
 
 import "time"
 
+// Storage defines a minimal key-value interface for rate limiting.
+// Implementations need only support Get, Set, and Incr with TTL.
+// All complex algorithm logic lives in the algorithms package.
 type Storage interface {
-	// Simple counter ops
+	// Incr atomically increments the numeric value at key by 1.
+	// If the key is missing or expired, it initializes it to 1 and applies TTL.
 	Incr(key string, ttl time.Duration) (float64, error)
+
+	// Get retrieves the numeric value stored at key.
+	// Returns 0 if the key does not exist or has expired.
 	Get(key string) (float64, error)
+
+	// Set stores the numeric value at key with the given TTL.
 	Set(key string, val float64, ttl time.Duration) error
-
-	// List ops (for sliding window)
-	AppendList(key string, value int64, ttl time.Duration) error
-	GetList(key string) ([]int64, error)
-	TrimList(key string, count int) error
-
-	// Sorted set ops (for precise sliding window)
-	ZAdd(key string, score float64, member int64, ttl time.Duration) error
-	ZRemRangeByScore(key string, min, max float64) error
-	ZCard(key string) (int64, error)
-	ZRangeByScore(key string, min, max float64) ([]int64, error)
-
-	// Hash ops (for complex state)
-	HMSet(key string, fields map[string]float64, ttl time.Duration) error
-	HMGet(key string, fields ...string) (map[string]float64, error)
 }
