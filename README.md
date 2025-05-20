@@ -4,8 +4,7 @@
 
 # GoRL - High-Performance Rate Limiter Library
 
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/AliRizaAynaci/gorl/actions) [![Go Version](https://img.shields.io/badge/go-1.24-blue.svg)](https://golang.org) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
-
+&#x20;&#x20;
 
 GoRL is a high-performance, extensible rate limiter library for Go. It offers multiple algorithms, pluggable storage backends, and minimal dependencies, making it ideal for both single-instance and distributed systems.
 
@@ -64,7 +63,7 @@ func main() {
 
   for i := 0; i < 10; i++ {
     allowed, _ := limiter.Allow("user-123")
-    fmt.Printf("Request #%d: allowed=%v\n", i+1, allowed)
+    fmt.Printf("Request #%%d: allowed=%%v\n", i+1, allowed)
   }
 }
 ```
@@ -93,43 +92,33 @@ docker run --name redis-limiter -p 6379:6379 -d redis
 
 Benchmarks run on AMD Ryzen 7 4800H.
 
-| Algorithm      | In-Memory (ns/op) | Redis (ns/op) |
-| -------------- | ----------------- | ------------- |
-| Fixed Window   | 1.6M              | 1.5M          |
-| Sliding Window | 2.3M              | 2.4M          |
-| Token Bucket   | 2.2M              | 2.2M          |
-| Leaky Bucket   | 2.4M              | 2.2M          |
+| Algorithm      | Single Key (ns/op, B/op, allocs) | Multi Key (ns/op, B/op, allocs) |
+| -------------- | -------------------------------- | ------------------------------- |
+| Fixed Window   | 89.2 ns/op, 24 B/op, 1 alloc     | 202.5 ns/op, 30 B/op, 2 allocs  |
+| Leaky Bucket   | 333.8 ns/op, 112 B/op, 4 allocs  | 506.4 ns/op, 126 B/op, 5 allocs |
+| Sliding Window | 260.5 ns/op, 72 B/op, 3 allocs   | 444.0 ns/op, 86 B/op, 4 allocs  |
+| Token Bucket   | 339.6 ns/op, 128 B/op, 4 allocs  | 504.4 ns/op, 126 B/op, 5 allocs |
 
 ## Storage Backends
 
-GoRL's pluggable storage layer allows you to seamlessly switch between built-in backends or integrate your own storage solutions. The storage interface is defined in `storage/storage.go`:
+GoRL's pluggable storage layer requires only a minimal key-value interface:
 
 ```go
 package storage
 
 import "time"
 
-// Storage defines the methods required for a rate limiter backend.
+// Storage defines a minimal interface for rate limiter backends.
+// Implementations only need to support Get, Set and Incr with TTL.
 type Storage interface {
-    // Counter operations
-    Incr(key string, ttl time.Duration) (float64, error)
-    Get(key string) (float64, error)
-    Set(key string, val float64, ttl time.Duration) error
+  // Incr atomically increments the value at key by 1, initializing to 1 if missing or expired.
+  Incr(key string, ttl time.Duration) (float64, error)
 
-    // List operations (for sliding window)
-    AppendList(key string, value int64, ttl time.Duration) error
-    GetList(key string) ([]int64, error)
-    TrimList(key string, count int) error
+  // Get retrieves the numeric value at key, returning 0 if missing or expired.
+  Get(key string) (float64, error)
 
-    // Sorted set operations (for precise sliding window)
-    ZAdd(key string, score float64, member int64, ttl time.Duration) error
-    ZRemRangeByScore(key string, min, max float64) error
-    ZCard(key string) (int64, error)
-    ZRangeByScore(key string, min, max float64) ([]int64, error)
-
-    // Hash operations (for complex state)
-    HMSet(key string, fields map[string]float64, ttl time.Duration) error
-    HMGet(key string, fields ...string) (map[string]float64, error)
+  // Set stores the numeric value at key with the specified TTL.
+  Set(key string, val float64, ttl time.Duration) error
 }
 ```
 
@@ -139,14 +128,9 @@ type Storage interface {
 
 The in-memory store (`inmem.NewInMemoryStore()`) is a thread-safe implementation using Go's `sync.Mutex`. It provides:
 
-* **Data Structures**:
-
-  * `map[string]*item` for counters with expiration.
-  * `map[string][]int64` for lists.
-  * `map[string][]zsetEntry` for sorted sets.
-  * `map[string]map[string]float64` for hash fields.
-* **Expiration**: TTL is set on each write; expired entries are lazily removed on access.
-* **Concurrency**: A single mutex protects all operations.
+* **Data Structures**: simple counters with expiration
+* **Expiration**: TTL is set on each write; expired entries are lazily removed on access
+* **Concurrency**: a mutex protects all operations
 
 ```go
 store := inmem.NewInMemoryStore()
@@ -156,13 +140,10 @@ Use case: ideal for single-instance deployments and unit tests.
 
 #### Redis Store
 
-The Redis store (`redis.NewRedisStore(redisURL)`) leverages Redis commands to support scalable, distributed rate limiting:
+The Redis store (`redis.NewRedisStore(redisURL)`) leverages Redis commands for scalable, distributed rate limiting:
 
 * **Counter**: `INCR` + `EXPIRE`
-* **List**: `RPUSH`, `LRANGE`, `LTRIM`
-* **Sorted Set**: `ZADD`, `ZREMRANGEBYSCORE`, `ZCARD`, `ZRANGEBYSCORE`
-* **Hash**: `HSET`, `HMGET`
-* **TTL Management**: `EXPIRE` is called after each write.
+* **TTL Management**: `EXPIRE` after each write
 
 ```go
 store := redis.NewRedisStore("redis://localhost:6379/0")
@@ -175,18 +156,21 @@ Use case: distributed services requiring a centralized store.
 To add your own backend (e.g., DynamoDB, NATS KV, SQL), implement the `Storage` interface:
 
 ```go
-type MyStore struct {
-    // internal client or connection
-}
+type MyStore struct { /* ... */ }
 
 func (m *MyStore) Incr(key string, ttl time.Duration) (float64, error) { /* ... */ }
-func (m *MyStore) Get(key string) (float64, error) { /* ... */ }
-// implement remaining methods...
+func (m *MyStore) Get(key string) (float64, error)       { /* ... */ }
+func (m *MyStore) Set(key string, val float64, ttl time.Duration) error { /* ... */ }
 ```
 
-Then pass your implementation to any limiter constructor:
+Then pass your implementation directly to an algorithm constructor from the internal algorithms package:
 
 ```go
+import (
+    "github.com/AliRizaAynaci/gorl/core"
+    "github.com/AliRizaAynaci/gorl/internal/algorithms"
+)
+
 myStore := &MyStore{ /* init */ }
 limiter := algorithms.NewSlidingWindowLimiter(core.Config{
     Limit:  100,
@@ -194,27 +178,10 @@ limiter := algorithms.NewSlidingWindowLimiter(core.Config{
 }, myStore)
 ```
 
-### Choosing a Backend
-
-* **In-Memory**: Best for single-node, low-latency scenarios and unit tests.
-* **Redis**: Ideal for distributed environments and when persistence or high availability is needed.
-* **Custom**: Tailor to specific infrastructure (e.g., cloud services, proprietary caches).
-
 ## Extending GoRL
 
-Implement the `Storage` interface in `storage/storage.go`:
+To extend GoRL with custom storage backends, implement the Storage interface as described above and pass your store directly to any algorithm constructor (e.g., algorithms.NewTokenBucketLimiter).
 
-```go
-type Storage interface {
-  Incr(key string, ttl time.Duration) (float64, error)
-  /* ... */
-}
-```
-
-## Roadmap
-
-* [ ] JetStream KV support
-* [ ] Prometheus monitoring middleware
 
 ## Contributing
 

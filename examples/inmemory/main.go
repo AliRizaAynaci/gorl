@@ -10,16 +10,22 @@ import (
 
 func main() {
 	limiter, _ := gorl.New(core.Config{
-		Strategy: core.LeakyBucket,
+		Strategy: core.FixedWindow,
 		KeyBy:    core.KeyByIP,
 		Limit:    3,
-		Window:   5 * time.Second,
+		Window:   10 * time.Second,
 	})
 
+	start := time.Now()
 	for i := 1; i <= 15; i++ {
 		allowed, err := limiter.Allow("127.0.0.1")
-		fmt.Printf("Request #%d: allowed=%v, err=%v\n", i, allowed, err)
-		time.Sleep(500 * time.Millisecond)
-	}
+		elapsed := time.Since(start).Seconds()
+		timestamp := time.Now().Format("15:04:05")
 
+		fmt.Printf("[%s +%.1fs] Request #%d: allowed=%v, err=%v\n",
+			timestamp, elapsed, i, allowed, err,
+		)
+
+		time.Sleep(1000 * time.Millisecond)
+	}
 }

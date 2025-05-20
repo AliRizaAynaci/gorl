@@ -8,15 +8,19 @@ import (
 	"github.com/AliRizaAynaci/gorl/storage"
 )
 
+// TokenBucketLimiter implements the token bucket algorithm using a minimal Storage API (Get/Set only).
+// State is stored in two separate keys per user: tokens and last refill timestamp.
 type TokenBucketLimiter struct {
-	limit        int
-	window       time.Duration
+	limit        int           // maximum tokens
+	window       time.Duration // refill window duration
 	store        storage.Storage
-	prefix       string
-	mu           sync.Mutex
-	timePerToken int64
+	prefix       string     // key prefix, e.g. "gorl:tb"
+	mu           sync.Mutex // ensure atomicity in-memory; Redis backend handles atomic Incr
+	timePerToken int64      // nanoseconds per token refill interval
 }
 
+// NewTokenBucketLimiter constructs a new TokenBucketLimiter.
+// Calculates timePerToken = window.Nanoseconds() / limit, with a minimum of 1.
 func NewTokenBucketLimiter(cfg core.Config, store storage.Storage) core.Limiter {
 	tpt := cfg.Window.Nanoseconds() / int64(cfg.Limit)
 	if tpt <= 0 {
@@ -31,24 +35,37 @@ func NewTokenBucketLimiter(cfg core.Config, store storage.Storage) core.Limiter 
 	}
 }
 
+// Allow checks token availability and consumes one token if allowed.
+// It reloads state with Get, recalculates tokens, and persists with Set.
 func (t *TokenBucketLimiter) Allow(key string) (bool, error) {
+	// lock for in-memory safety; Redis backend operations are atomic.
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	storageKey := t.prefix + ":" + key
 	now := time.Now().UnixNano()
+	tokensKey := t.prefix + ":tokens:" + key
+	refillKey := t.prefix + ":refill:" + key
 
-	state, _ := t.store.HMGet(storageKey, "tokens", "last_refill")
-	var tokens int64
-	var lastRefill int64
+	// Load current token count
+	tokenVal, err := t.store.Get(tokensKey)
+	if err != nil {
+		return false, err
+	}
+	tokens := int64(tokenVal)
 
-	if state["last_refill"] == 0 {
+	// Load last refill timestamp
+	lastRefillVal, err := t.store.Get(refillKey)
+	if err != nil {
+		return false, err
+	}
+	lastRefill := int64(lastRefillVal)
+
+	// Initialize on first request
+	if lastRefill == 0 {
 		tokens = int64(t.limit)
 		lastRefill = now
 	} else {
-		tokens = int64(state["tokens"])
-		lastRefill = int64(state["last_refill"])
-
+		// Refill tokens based on elapsed time
 		elapsed := now - lastRefill
 		newTokens := elapsed / t.timePerToken
 		if newTokens > 0 {
@@ -56,20 +73,67 @@ func (t *TokenBucketLimiter) Allow(key string) (bool, error) {
 			if tokens > int64(t.limit) {
 				tokens = int64(t.limit)
 			}
+			// advance lastRefill
 			lastRefill += newTokens * t.timePerToken
 		}
 	}
 
+	// Check and consume
 	allowed := tokens > 0
 	if allowed {
 		tokens--
 	}
 
-	fields := map[string]float64{
-		"tokens":      float64(tokens),
-		"last_refill": float64(lastRefill),
+	// Persist updated values
+	if err := t.store.Set(tokensKey, float64(tokens), t.window); err != nil {
+		return false, err
 	}
-	_ = t.store.HMSet(storageKey, fields, t.window)
+	if err := t.store.Set(refillKey, float64(lastRefill), t.window); err != nil {
+		return false, err
+	}
 
 	return allowed, nil
 }
+
+//func (t *TokenBucketLimiter) Allow(key string) (bool, error) {
+//	t.mu.Lock()
+//	defer t.mu.Unlock()
+//
+//	storageKey := t.prefix + ":" + key
+//	now := time.Now().UnixNano()
+//
+//	state, _ := t.store.HMGet(storageKey, "tokens", "last_refill")
+//	var tokens int64
+//	var lastRefill int64
+//
+//	if state["last_refill"] == 0 {
+//		tokens = int64(t.limit)
+//		lastRefill = now
+//	} else {
+//		tokens = int64(state["tokens"])
+//		lastRefill = int64(state["last_refill"])
+//
+//		elapsed := now - lastRefill
+//		newTokens := elapsed / t.timePerToken
+//		if newTokens > 0 {
+//			tokens += newTokens
+//			if tokens > int64(t.limit) {
+//				tokens = int64(t.limit)
+//			}
+//			lastRefill += newTokens * t.timePerToken
+//		}
+//	}
+//
+//	allowed := tokens > 0
+//	if allowed {
+//		tokens--
+//	}
+//
+//	fields := map[string]float64{
+//		"tokens":      float64(tokens),
+//		"last_refill": float64(lastRefill),
+//	}
+//	_ = t.store.HMSet(storageKey, fields, t.window)
+//
+//	return allowed, nil
+//}
