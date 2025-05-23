@@ -1,3 +1,6 @@
+// Package gorl is the main package for the rate limiter library.
+// It provides a simple entry point (New function) to create rate limiters
+// with various algorithms and storage backends.
 package gorl
 
 import (

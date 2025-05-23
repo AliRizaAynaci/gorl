@@ -1,3 +1,5 @@
+// Package storage provides a generic key-value storage interface
+// specifically designed for rate limiting algorithms.
 package storage
 
 import "time"

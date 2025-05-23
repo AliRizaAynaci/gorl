@@ -1,3 +1,4 @@
+// Package main demonstrates the usage of the in-memory rate limiter.
 package main
 
 import (
@@ -8,6 +9,7 @@ import (
 	"github.com/AliRizaAynaci/gorl/core"
 )
 
+// main runs a simple demonstration of the rate limiter.
 func main() {
 	limiter, _ := gorl.New(core.Config{
 		Strategy: core.FixedWindow,

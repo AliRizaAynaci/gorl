@@ -1,3 +1,4 @@
+// Package core defines the core interfaces, types, and constants used by the rate limiting library.
 package core
 
 import (
@@ -7,9 +8,12 @@ import (
 
 // Common error values for rate limiting failures.
 var (
+	// ErrBackendUnavailable indicates that the storage backend (e.g., Redis) is not reachable.
 	ErrBackendUnavailable = errors.New("backend unavailable") // e.g., Redis is down
-	ErrConfigInvalid      = errors.New("invalid configuration")
-	ErrUnknownStrategy    = errors.New("unknown rate limiting strategy")
+	// ErrConfigInvalid indicates that the provided configuration for the rate limiter is not valid.
+	ErrConfigInvalid = errors.New("invalid configuration")
+	// ErrUnknownStrategy indicates that the requested rate limiting strategy is not supported.
+	ErrUnknownStrategy = errors.New("unknown rate limiting strategy")
 )
 
 // StrategyType represents the available rate limiting algorithms.

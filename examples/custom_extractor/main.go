@@ -1,3 +1,4 @@
+// Package main demonstrates using a custom key extractor with the rate limiter.
 package main
 
 import (
@@ -8,6 +9,7 @@ import (
 	"github.com/AliRizaAynaci/gorl/core"
 )
 
+// main runs a simple demonstration of the rate limiter with a custom key extractor.
 func main() {
 	customExtractor := func(ctx interface{}) string {
 		return ctx.(string)

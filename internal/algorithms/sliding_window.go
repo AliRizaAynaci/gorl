@@ -1,3 +1,4 @@
+// Package algorithms implements various rate limiting algorithms.
 package algorithms
 
 import (

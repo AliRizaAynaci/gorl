@@ -1,3 +1,4 @@
+// Package inmem provides an in-memory storage implementation for the rate limiter.
 package inmem
 
 import (

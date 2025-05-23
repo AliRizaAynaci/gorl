@@ -1,3 +1,4 @@
+// Package main demonstrates the usage of the Redis-backed rate limiter.
 package main
 
 import (
@@ -8,6 +9,7 @@ import (
 	"github.com/AliRizaAynaci/gorl/core"
 )
 
+// main runs a simple demonstration of the rate limiter using a Redis backend.
 func main() {
 	limiter, err := gorl.New(core.Config{
 		Strategy: core.FixedWindow,

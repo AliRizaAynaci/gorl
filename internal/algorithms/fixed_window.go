@@ -1,3 +1,4 @@
+// Package algorithms implements various rate limiting algorithms.
 package algorithms
 
 import (
@@ -7,6 +8,8 @@ import (
 	"github.com/AliRizaAynaci/gorl/storage"
 )
 
+// FixedWindowLimiter implements the fixed window rate limiting algorithm.
+// It allows a certain number of requests within a fixed time window.
 type FixedWindowLimiter struct {
 	limit  int
 	window time.Duration
@@ -14,6 +17,7 @@ type FixedWindowLimiter struct {
 	prefix string
 }
 
+// NewFixedWindowLimiter creates a new FixedWindowLimiter.
 func NewFixedWindowLimiter(cfg core.Config, store storage.Storage) core.Limiter {
 	return &FixedWindowLimiter{
 		limit:  cfg.Limit,
@@ -23,6 +27,7 @@ func NewFixedWindowLimiter(cfg core.Config, store storage.Storage) core.Limiter 
 	}
 }
 
+// Allow checks if a request with the given key is allowed under the fixed window policy.
 func (f *FixedWindowLimiter) Allow(key string) (bool, error) {
 	storageKey := f.prefix + ":" + key
 

@@ -1,4 +1,4 @@
-// storage/redis.go
+// Package redis provides a Redis-backed storage implementation for the rate limiter.
 package redis
 
 import (
@@ -10,6 +10,8 @@ import (
 	goredis "github.com/redis/go-redis/v9"
 )
 
+// RedisStore implements the storage.Storage interface using a Redis backend.
+// It provides atomic operations necessary for distributed rate limiting.
 type RedisStore struct {
 	client *goredis.Client
 	ctx    context.Context
