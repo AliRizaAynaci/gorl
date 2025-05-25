@@ -13,25 +13,29 @@ import (
 // LeakyBucketLimiter implements the leaky bucket algorithm using minimal Storage API (Get/Set only).
 // State is stored in two separate keys per user: water level and last leak timestamp.
 type LeakyBucketLimiter struct {
-	limit  int           // maximum water capacity
-	window time.Duration // leak window duration
-	store  storage.Storage
-	prefix string     // key prefix, e.g. "gorl:lb"
-	mu     sync.Mutex // ensure atomicity in-memory; Redis backend handles atomic ops
+	limit   int           // maximum water capacity
+	window  time.Duration // leak window duration
+	store   storage.Storage
+	prefix  string     // key prefix, e.g. "gorl:lb"
+	mu      sync.Mutex // ensure atomicity in-memory; Redis backend handles atomic ops
+	metrics core.MetricsCollector
 }
 
 // NewLeakyBucketLimiter constructs a new LeakyBucketLimiter.
 func NewLeakyBucketLimiter(cfg core.Config, store storage.Storage) core.Limiter {
 	return &LeakyBucketLimiter{
-		limit:  cfg.Limit,
-		window: cfg.Window,
-		store:  store,
-		prefix: "gorl:lb",
+		limit:   cfg.Limit,
+		window:  cfg.Window,
+		store:   store,
+		prefix:  "gorl:lb",
+		metrics: cfg.Metrics,
 	}
 }
 
 // Allow checks and updates water level, allowing requests at a steady rate.
 func (l *LeakyBucketLimiter) Allow(key string) (bool, error) {
+	start := time.Now()
+
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -83,6 +87,13 @@ func (l *LeakyBucketLimiter) Allow(key string) (bool, error) {
 	}
 	if err := l.store.Set(leakKey, float64(lastLeak), l.window); err != nil {
 		return false, err
+	}
+
+	l.metrics.ObserveLatency(time.Since(start))
+	if allowed {
+		l.metrics.IncAllow()
+	} else {
+		l.metrics.IncDeny()
 	}
 
 	return allowed, nil
