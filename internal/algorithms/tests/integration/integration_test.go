@@ -35,8 +35,9 @@ func TestAlgorithmsWithRedis(t *testing.T) {
 			t.Run(beName+"/"+s.name, func(t *testing.T) {
 				store := storeFn()
 				cfg := core.Config{
-					Limit:  3,
-					Window: 1 * time.Second,
+					Limit:   3,
+					Window:  1 * time.Second,
+					Metrics: &core.NoopMetrics{},
 				}
 				limiter := s.constructor(cfg, store)
 				common.CommonLimiterBehavior(t, limiter, "test-user", 3)

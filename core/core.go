@@ -58,6 +58,8 @@ type Config struct {
 	// CustomKeyExtractor is an optional function for custom rate limiting key generation.
 	// Used only when KeyBy == KeyByCustom.
 	CustomKeyExtractor KeyExtractor
+	// Optional: metrics collector (nil → NoopMetrics)
+	Metrics MetricsCollector
 }
 
 // Limiter defines the interface that all rate limiting strategies must implement.

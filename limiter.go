@@ -22,6 +22,11 @@ var strategyRegistry = map[core.StrategyType]func(core.Config, storage.Storage) 
 // If cfg.RedisURL is provided, Redis is used as the storage backend. Otherwise, an in-memory backend is used.
 // Supported strategies: FixedWindow, TokenBucket, SlidingWindow, LeakyBucket.
 func New(cfg core.Config) (core.Limiter, error) {
+	// If Metrics is nil, default to NoopMetrics.
+	if cfg.Metrics == nil {
+		cfg.Metrics = &core.NoopMetrics{}
+	}
+
 	var store storage.Storage
 
 	if cfg.RedisURL != "" {

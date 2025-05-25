@@ -11,24 +11,27 @@ import (
 // SlidingWindowLimiter implements an approximate sliding window algorithm using minimal Storage API (Get/Set/Incr).
 // It keeps two counters (current and previous window) and a timestamp of the window start.
 type SlidingWindowLimiter struct {
-	limit  int           // maximum requests per window
-	window time.Duration // window duration
-	store  storage.Storage
-	prefix string // key prefix, e.g. "gorl:sw"
+	limit   int           // maximum requests per window
+	window  time.Duration // window duration
+	store   storage.Storage
+	prefix  string // key prefix, e.g. "gorl:sw"
+	metrics core.MetricsCollector
 }
 
 // NewSlidingWindowLimiter constructs a new SlidingWindowLimiter.
 func NewSlidingWindowLimiter(cfg core.Config, store storage.Storage) core.Limiter {
 	return &SlidingWindowLimiter{
-		limit:  cfg.Limit,
-		window: cfg.Window,
-		store:  store,
-		prefix: "gorl:sw",
+		limit:   cfg.Limit,
+		window:  cfg.Window,
+		store:   store,
+		prefix:  "gorl:sw",
+		metrics: cfg.Metrics,
 	}
 }
 
 // Allow checks whether a request is allowed under a sliding window.
 func (s *SlidingWindowLimiter) Allow(key string) (bool, error) {
+	start := time.Now()
 	// Current timestamp in nanoseconds
 	now := time.Now().UnixNano()
 
@@ -98,6 +101,13 @@ func (s *SlidingWindowLimiter) Allow(key string) (bool, error) {
 		if err != nil {
 			return false, err
 		}
+	}
+
+	s.metrics.ObserveLatency(time.Since(start))
+	if allowed {
+		s.metrics.IncAllow()
+	} else {
+		s.metrics.IncDeny()
 	}
 
 	return allowed, nil

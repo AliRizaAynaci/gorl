@@ -17,7 +17,8 @@ type TokenBucketLimiter struct {
 	store        storage.Storage
 	prefix       string     // key prefix, e.g. "gorl:tb"
 	mu           sync.Mutex // ensure atomicity in-memory; Redis backend handles atomic Incr
-	timePerToken int64      // nanoseconds per token refill interval
+	metrics      core.MetricsCollector
+	timePerToken int64 // nanoseconds per token refill interval
 }
 
 // NewTokenBucketLimiter constructs a new TokenBucketLimiter.
@@ -32,6 +33,7 @@ func NewTokenBucketLimiter(cfg core.Config, store storage.Storage) core.Limiter 
 		window:       cfg.Window,
 		store:        store,
 		prefix:       "gorl:tb",
+		metrics:      cfg.Metrics,
 		timePerToken: tpt,
 	}
 }
@@ -39,6 +41,7 @@ func NewTokenBucketLimiter(cfg core.Config, store storage.Storage) core.Limiter 
 // Allow checks token availability and consumes one token if allowed.
 // It reloads state with Get, recalculates tokens, and persists with Set.
 func (t *TokenBucketLimiter) Allow(key string) (bool, error) {
+	start := time.Now()
 	// lock for in-memory safety; Redis backend operations are atomic.
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -91,6 +94,13 @@ func (t *TokenBucketLimiter) Allow(key string) (bool, error) {
 	}
 	if err := t.store.Set(refillKey, float64(lastRefill), t.window); err != nil {
 		return false, err
+	}
+
+	t.metrics.ObserveLatency(time.Since(start))
+	if allowed {
+		t.metrics.IncAllow()
+	} else {
+		t.metrics.IncDeny()
 	}
 
 	return allowed, nil

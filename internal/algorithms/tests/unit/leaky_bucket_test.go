@@ -15,8 +15,9 @@ import (
 func TestLeakyBucketLimiter_Basic(t *testing.T) {
 	store := inmem.NewInMemoryStore()
 	limiter := algorithms.NewLeakyBucketLimiter(core.Config{
-		Limit:  3,
-		Window: 2 * time.Second,
+		Limit:   3,
+		Window:  2 * time.Second,
+		Metrics: &core.NoopMetrics{},
 	}, store)
 	key := "test-leaky"
 	for i := 0; i < 3; i++ {
@@ -36,8 +37,9 @@ func BenchmarkLeakyBucketLimiter_SingleKey(b *testing.B) {
 
 	store := inmem.NewInMemoryStore()
 	limiter := algorithms.NewLeakyBucketLimiter(core.Config{
-		Limit:  10000,
-		Window: time.Second,
+		Limit:   10000,
+		Window:  time.Second,
+		Metrics: &core.NoopMetrics{},
 	}, store)
 	key := "bench-user"
 
@@ -52,8 +54,9 @@ func BenchmarkLeakyBucketLimiter_MultiKey(b *testing.B) {
 
 	store := inmem.NewInMemoryStore()
 	limiter := algorithms.NewLeakyBucketLimiter(core.Config{
-		Limit:  10000,
-		Window: time.Second,
+		Limit:   10000,
+		Window:  time.Second,
+		Metrics: &core.NoopMetrics{},
 	}, store)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -65,8 +68,9 @@ func BenchmarkLeakyBucketLimiter_MultiKey(b *testing.B) {
 func TestLeakyBucketLimiter_Concurrency(t *testing.T) {
 	store := inmem.NewInMemoryStore()
 	limiter := algorithms.NewLeakyBucketLimiter(core.Config{
-		Limit:  10,
-		Window: 2 * time.Second,
+		Limit:   10,
+		Window:  2 * time.Second,
+		Metrics: &core.NoopMetrics{},
 	}, store)
 	key := "user-concurrent-lb"
 
