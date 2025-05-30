@@ -19,6 +19,7 @@ type TokenBucketLimiter struct {
 	mu           sync.Mutex // ensure atomicity in-memory; Redis backend handles atomic Incr
 	metrics      core.MetricsCollector
 	timePerToken int64 // nanoseconds per token refill interval
+	failOpen     bool
 }
 
 // NewTokenBucketLimiter constructs a new TokenBucketLimiter.
@@ -35,6 +36,7 @@ func NewTokenBucketLimiter(cfg core.Config, store storage.Storage) core.Limiter 
 		prefix:       "gorl:tb",
 		metrics:      cfg.Metrics,
 		timePerToken: tpt,
+		failOpen:     cfg.FailOpen,
 	}
 }
 
@@ -52,15 +54,15 @@ func (t *TokenBucketLimiter) Allow(key string) (bool, error) {
 
 	// Load current token count
 	tokenVal, err := t.store.Get(tokensKey)
-	if err != nil {
-		return false, err
+	if allowed, retErr, done := failOpenHandler(start, err, t.failOpen, t.metrics); done {
+		return allowed, retErr
 	}
 	tokens := int64(tokenVal)
 
 	// Load last refill timestamp
 	lastRefillVal, err := t.store.Get(refillKey)
-	if err != nil {
-		return false, err
+	if allowed, retErr, done := failOpenHandler(start, err, t.failOpen, t.metrics); done {
+		return allowed, retErr
 	}
 	lastRefill := int64(lastRefillVal)
 
@@ -89,11 +91,13 @@ func (t *TokenBucketLimiter) Allow(key string) (bool, error) {
 	}
 
 	// Persist updated values
-	if err := t.store.Set(tokensKey, float64(tokens), t.window); err != nil {
-		return false, err
+	err = t.store.Set(tokensKey, float64(tokens), t.window)
+	if allowed, retErr, done := failOpenHandler(start, err, t.failOpen, t.metrics); done {
+		return allowed, retErr
 	}
-	if err := t.store.Set(refillKey, float64(lastRefill), t.window); err != nil {
-		return false, err
+	err = t.store.Set(refillKey, float64(lastRefill), t.window)
+	if allowed, retErr, done := failOpenHandler(start, err, t.failOpen, t.metrics); done {
+		return allowed, retErr
 	}
 
 	t.metrics.ObserveLatency(time.Since(start))

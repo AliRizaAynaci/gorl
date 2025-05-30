@@ -13,22 +13,24 @@ import (
 // LeakyBucketLimiter implements the leaky bucket algorithm using minimal Storage API (Get/Set only).
 // State is stored in two separate keys per user: water level and last leak timestamp.
 type LeakyBucketLimiter struct {
-	limit   int           // maximum water capacity
-	window  time.Duration // leak window duration
-	store   storage.Storage
-	prefix  string     // key prefix, e.g. "gorl:lb"
-	mu      sync.Mutex // ensure atomicity in-memory; Redis backend handles atomic ops
-	metrics core.MetricsCollector
+	limit    int           // maximum water capacity
+	window   time.Duration // leak window duration
+	store    storage.Storage
+	prefix   string     // key prefix, e.g. "gorl:lb"
+	mu       sync.Mutex // ensure atomicity in-memory; Redis backend handles atomic ops
+	metrics  core.MetricsCollector
+	failOpen bool
 }
 
 // NewLeakyBucketLimiter constructs a new LeakyBucketLimiter.
 func NewLeakyBucketLimiter(cfg core.Config, store storage.Storage) core.Limiter {
 	return &LeakyBucketLimiter{
-		limit:   cfg.Limit,
-		window:  cfg.Window,
-		store:   store,
-		prefix:  "gorl:lb",
-		metrics: cfg.Metrics,
+		limit:    cfg.Limit,
+		window:   cfg.Window,
+		store:    store,
+		prefix:   "gorl:lb",
+		metrics:  cfg.Metrics,
+		failOpen: cfg.FailOpen,
 	}
 }
 
@@ -45,14 +47,14 @@ func (l *LeakyBucketLimiter) Allow(key string) (bool, error) {
 
 	// Load current state
 	waterVal, err := l.store.Get(waterKey)
-	if err != nil {
-		return false, err
+	if allowed, retErr, done := failOpenHandler(start, err, l.failOpen, l.metrics); done {
+		return allowed, retErr
 	}
-	waterLevel := int(waterVal)
 
+	waterLevel := int(waterVal)
 	lastLeakVal, err := l.store.Get(leakKey)
-	if err != nil {
-		return false, err
+	if allowed, retErr, done := failOpenHandler(start, err, l.failOpen, l.metrics); done {
+		return allowed, retErr
 	}
 	lastLeak := int64(lastLeakVal)
 
@@ -82,11 +84,13 @@ func (l *LeakyBucketLimiter) Allow(key string) (bool, error) {
 	}
 
 	// Persist updated state
-	if err := l.store.Set(waterKey, float64(waterLevel), l.window); err != nil {
-		return false, err
+	err = l.store.Set(waterKey, float64(waterLevel), l.window)
+	if allowed, retErr, done := failOpenHandler(start, err, l.failOpen, l.metrics); done {
+		return allowed, retErr
 	}
-	if err := l.store.Set(leakKey, float64(lastLeak), l.window); err != nil {
-		return false, err
+	err = l.store.Set(leakKey, float64(lastLeak), l.window)
+	if allowed, retErr, done := failOpenHandler(start, err, l.failOpen, l.metrics); done {
+		return allowed, retErr
 	}
 
 	l.metrics.ObserveLatency(time.Since(start))
