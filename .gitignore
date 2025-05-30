@@ -5,6 +5,10 @@
 coverage
 coverage.html
 
+# backup & temp files
+*~
+*.un~
+
 
 # Build / binary folders
 /bin/

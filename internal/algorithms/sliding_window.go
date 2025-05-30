@@ -11,21 +11,23 @@ import (
 // SlidingWindowLimiter implements an approximate sliding window algorithm using minimal Storage API (Get/Set/Incr).
 // It keeps two counters (current and previous window) and a timestamp of the window start.
 type SlidingWindowLimiter struct {
-	limit   int           // maximum requests per window
-	window  time.Duration // window duration
-	store   storage.Storage
-	prefix  string // key prefix, e.g. "gorl:sw"
-	metrics core.MetricsCollector
+	limit    int           // maximum requests per window
+	window   time.Duration // window duration
+	store    storage.Storage
+	prefix   string // key prefix, e.g. "gorl:sw"
+	metrics  core.MetricsCollector
+	failOpen bool
 }
 
 // NewSlidingWindowLimiter constructs a new SlidingWindowLimiter.
 func NewSlidingWindowLimiter(cfg core.Config, store storage.Storage) core.Limiter {
 	return &SlidingWindowLimiter{
-		limit:   cfg.Limit,
-		window:  cfg.Window,
-		store:   store,
-		prefix:  "gorl:sw",
-		metrics: cfg.Metrics,
+		limit:    cfg.Limit,
+		window:   cfg.Window,
+		store:    store,
+		prefix:   "gorl:sw",
+		metrics:  cfg.Metrics,
+		failOpen: cfg.FailOpen,
 	}
 }
 
@@ -42,8 +44,8 @@ func (s *SlidingWindowLimiter) Allow(key string) (bool, error) {
 
 	// Load last window start
 	tsVal, err := s.store.Get(tsKey)
-	if err != nil {
-		return false, err
+	if allowed, retErr, done := failOpenHandler(start, err, s.failOpen, s.metrics); done {
+		return allowed, retErr
 	}
 
 	var windowStart int64
@@ -63,8 +65,8 @@ func (s *SlidingWindowLimiter) Allow(key string) (bool, error) {
 
 			// Shift current to previous
 			currCount, err := s.store.Get(currKey)
-			if err != nil {
-				return false, err
+			if allowed, retErr, done := failOpenHandler(start, err, s.failOpen, s.metrics); done {
+				return allowed, retErr
 			}
 			_ = s.store.Set(prevKey, currCount, s.window)
 
@@ -83,12 +85,12 @@ func (s *SlidingWindowLimiter) Allow(key string) (bool, error) {
 
 	// Load counts
 	prevCount, err := s.store.Get(prevKey)
-	if err != nil {
-		return false, err
+	if allowed, retErr, done := failOpenHandler(start, err, s.failOpen, s.metrics); done {
+		return allowed, retErr
 	}
 	currCount, err := s.store.Get(currKey)
-	if err != nil {
-		return false, err
+	if allowed, retErr, done := failOpenHandler(start, err, s.failOpen, s.metrics); done {
+		return allowed, retErr
 	}
 
 	// Approximate total in sliding window
@@ -98,8 +100,8 @@ func (s *SlidingWindowLimiter) Allow(key string) (bool, error) {
 	if allowed {
 		// Increment current window counter
 		_, err := s.store.Incr(currKey, s.window)
-		if err != nil {
-			return false, err
+		if allowed, retErr, done := failOpenHandler(start, err, s.failOpen, s.metrics); done {
+			return allowed, retErr
 		}
 	}
 

@@ -12,11 +12,12 @@ import (
 // main runs a simple demonstration of the rate limiter using a Redis backend.
 func main() {
 	limiter, err := gorl.New(core.Config{
-		Strategy: core.FixedWindow,
+		Strategy: core.TokenBucket,
 		KeyBy:    core.KeyByAPIKey,
 		Limit:    4,
 		Window:   10 * time.Second,
 		RedisURL: "redis://localhost:6379/0",
+		FailOpen: true,
 	})
 	if err != nil {
 		panic(err)

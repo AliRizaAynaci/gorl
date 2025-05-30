@@ -11,21 +11,23 @@ import (
 // FixedWindowLimiter implements the fixed window rate limiting algorithm.
 // It allows a certain number of requests within a fixed time window.
 type FixedWindowLimiter struct {
-	limit   int
-	window  time.Duration
-	store   storage.Storage
-	prefix  string
-	metrics core.MetricsCollector
+	limit    int
+	window   time.Duration
+	store    storage.Storage
+	prefix   string
+	metrics  core.MetricsCollector
+	failOpen bool
 }
 
 // NewFixedWindowLimiter creates a new FixedWindowLimiter.
 func NewFixedWindowLimiter(cfg core.Config, store storage.Storage) core.Limiter {
 	return &FixedWindowLimiter{
-		limit:   cfg.Limit,
-		window:  cfg.Window,
-		store:   store,
-		prefix:  "gorl:fw",
-		metrics: cfg.Metrics,
+		limit:    cfg.Limit,
+		window:   cfg.Window,
+		store:    store,
+		prefix:   "gorl:fw",
+		metrics:  cfg.Metrics,
+		failOpen: cfg.FailOpen,
 	}
 }
 
@@ -35,9 +37,10 @@ func (f *FixedWindowLimiter) Allow(key string) (bool, error) {
 	storageKey := f.prefix + ":" + key
 
 	count, err := f.store.Incr(storageKey, f.window)
-	if err != nil {
-		return false, err
+	if allowed, retErr, done := failOpenHandler(start, err, f.failOpen, f.metrics); done {
+		return allowed, retErr
 	}
+	
 	allowed := count <= float64(f.limit)
 	f.metrics.ObserveLatency(time.Since(start))
 
