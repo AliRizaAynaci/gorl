@@ -12,7 +12,7 @@ import (
 // main runs a simple demonstration of the rate limiter.
 func main() {
 	limiter, _ := gorl.New(core.Config{
-		Strategy: core.FixedWindow,
+		Strategy: core.TokenBucket,
 		KeyBy:    core.KeyByIP,
 		Limit:    3,
 		Window:   10 * time.Second,
