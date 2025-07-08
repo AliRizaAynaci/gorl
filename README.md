@@ -218,32 +218,110 @@ store := redis.NewRedisStore("redis://localhost:6379/0")
 * **TTL Management**: reset expire on each write
 * **Use case**: distributed services
 
-## Extending GoRL
+## Custom Storage Backend
 
-To add a custom backend, implement the `Storage` interface:
+By default, `gorl.New(cfg core.Config)` wires up:
 
-```go
-type MyStore struct { /* ... */ }
+* **Redis** (if `cfg.RedisURL` is set)
+* **In-memory** (otherwise)
 
-func (m *MyStore) Incr(key string, ttl time.Duration) (float64, error) { /* ... */ }
-func (m *MyStore) Get(key string) (float64, error)       { /* ... */ }
-func (m *MyStore) Set(key string, val float64, ttl time.Duration) error { /* ... */ }
-```
+To add any other storage backend (JetStream, DynamoDB, etc.) without forking the repo, follow these steps:
 
-Then pass your store directly to any algorithm constructor:
+1. **Create** a sub-package `github.com/AliRizaAynaci/gorl/storage/yourmodule` and implement the `storage.Storage` interface:
 
-```go
-import (
-  "github.com/AliRizaAynaci/gorl/core"
-  "github.com/AliRizaAynaci/gorl/internal/algorithms"
-)
+   ```go
+   // github.com/AliRizaAynaci/gorl/storage/yourmodule/store.go
+   package yourmodule
 
-myStore := &MyStore{/* init */}
-limiter := algorithms.NewSlidingWindowLimiter(core.Config{
-  Limit:  100,
-  Window: 1 * time.Minute,
-}, myStore)
-```
+   import (
+     "time"
+     "github.com/AliRizaAynaci/gorl/storage"
+   )
+
+   // YourModuleStore holds your connection fields.
+   type YourModuleStore struct {
+     // e.g. client, context
+   }
+
+   // NewYourModuleStore constructs your store with any parameters.
+   func NewYourModuleStore(/* params */) *YourModuleStore {
+     return &YourModuleStore{/* initialize fields */}
+   }
+
+   func (s *YourModuleStore) Incr(key string, ttl time.Duration) (float64, error) {
+     // increment logic
+   }
+   func (s *YourModuleStore) Get(key string) (float64, error) {
+     // get logic
+   }
+   func (s *YourModuleStore) Set(key string, val float64, ttl time.Duration) error {
+     // set logic
+   }
+   ```
+
+2. **Extend** `core.Config` in `gorl/core/config.go`:
+
+   ```go
+   type Config struct {
+     Strategy      StrategyType
+     Limit         float64
+     Window        time.Duration
+     RedisURL      string
+     YourModuleURL string // ← new field
+     Metrics       Metrics
+   }
+   ```
+
+3. **Wire** your store in `gorl/limiter.go`:
+
+   ```go
+   func New(cfg core.Config) (core.Limiter, error) {
+     if cfg.Metrics == nil {
+       cfg.Metrics = &core.NoopMetrics{}
+     }
+
+     var store storage.Storage
+     switch {
+     case cfg.YourModuleURL != "":
+       store = yourmodule.NewYourModuleStore(cfg.YourModuleURL)
+     case cfg.RedisURL != "":
+       store = redis.NewRedisStore(cfg.RedisURL)
+     default:
+       store = inmem.NewInMemoryStore()
+     }
+
+     constructor, ok := strategyRegistry[cfg.Strategy]
+     if !ok {
+       return nil, core.ErrUnknownStrategy
+     }
+     return constructor(cfg, store), nil
+   }
+   ```
+
+4. **Use** your custom backend:
+
+   ```go
+   import (
+     "log"
+     "time"
+     "github.com/AliRizaAynaci/gorl"
+     "github.com/AliRizaAynaci/gorl/core"
+   )
+
+   cfg := core.Config{
+     Strategy:      core.SlidingWindow,
+     Limit:         100,
+     Window:        time.Minute,
+     YourModuleURL: "your-backend://connection-string",
+   }
+   limiter, err := gorl.New(cfg)
+   if err != nil {
+     log.Fatal(err)
+   }
+   ```
+
+> **Note:** After implementing and wiring up your custom storage backend, open a Pull Request against the `main` branch to merge these changes into the GoRL repository before using it in production.
+
 
 ## Contributing
 
