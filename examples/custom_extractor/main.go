@@ -2,11 +2,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"time"
 
-	"github.com/AliRizaAynaci/gorl"
-	"github.com/AliRizaAynaci/gorl/core"
+	"github.com/AliRizaAynaci/gorl/v2"
+	"github.com/AliRizaAynaci/gorl/v2/core"
 )
 
 // main runs a simple demonstration of the rate limiter with a custom key extractor.
@@ -15,17 +16,23 @@ func main() {
 		return ctx.(string)
 	}
 
-	limiter, _ := gorl.New(core.Config{
+	limiter, err := gorl.New(core.Config{
 		Strategy:           core.LeakyBucket,
 		KeyBy:              core.KeyByCustom,
 		Limit:              2,
 		Window:             5 * time.Second,
 		CustomKeyExtractor: customExtractor,
 	})
+	if err != nil {
+		panic(err)
+	}
+	defer limiter.Close()
 
+	ctx := context.Background()
 	users := []string{"user-123", "user-456", "user-123", "user-123"}
 	for i, user := range users {
-		allowed, err := limiter.Allow(user)
-		fmt.Printf("Req %d - User: %s, allowed=%v, err=%v\n", i+1, user, allowed, err)
+		res, err := limiter.Allow(ctx, user)
+		fmt.Printf("Req %d - User: %s, allowed=%v, remaining=%d, err=%v\n", 
+			i+1, user, res.Allowed, res.Remaining, err)
 	}
 }

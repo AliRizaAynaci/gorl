@@ -2,28 +2,28 @@
 package algorithms
 
 import (
+	"context"
 	"sync"
 	"time"
 
-	"github.com/AliRizaAynaci/gorl/core"
-	"github.com/AliRizaAynaci/gorl/storage"
+	"github.com/AliRizaAynaci/gorl/v2/core"
+	"github.com/AliRizaAynaci/gorl/v2/storage"
 )
 
 // TokenBucketLimiter implements the token bucket algorithm using a minimal Storage API (Get/Set only).
 // State is stored in two separate keys per user: tokens and last refill timestamp.
 type TokenBucketLimiter struct {
-	limit        int           // maximum tokens
-	window       time.Duration // refill window duration
+	limit        int
+	window       time.Duration
 	store        storage.Storage
-	prefix       string     // key prefix, e.g. "gorl:tb"
-	mu           sync.Mutex // ensure atomicity in-memory; Redis backend handles atomic Incr
+	prefix       string
+	mu           sync.Mutex
 	metrics      core.MetricsCollector
-	timePerToken int64 // nanoseconds per token refill interval
+	timePerToken int64
 	failOpen     bool
 }
 
 // NewTokenBucketLimiter constructs a new TokenBucketLimiter.
-// Calculates timePerToken = window.Nanoseconds() / limit, with a minimum of 1.
 func NewTokenBucketLimiter(cfg core.Config, store storage.Storage) core.Limiter {
 	tpt := cfg.Window.Nanoseconds() / int64(cfg.Limit)
 	if tpt <= 0 {
@@ -41,10 +41,8 @@ func NewTokenBucketLimiter(cfg core.Config, store storage.Storage) core.Limiter 
 }
 
 // Allow checks token availability and consumes one token if allowed.
-// It reloads state with Get, recalculates tokens, and persists with Set.
-func (t *TokenBucketLimiter) Allow(key string) (bool, error) {
+func (t *TokenBucketLimiter) Allow(ctx context.Context, key string) (core.Result, error) {
 	start := time.Now()
-	// lock for in-memory safety; Redis backend operations are atomic.
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -53,16 +51,16 @@ func (t *TokenBucketLimiter) Allow(key string) (bool, error) {
 	refillKey := t.prefix + ":refill:" + key
 
 	// Load current token count
-	tokenVal, err := t.store.Get(tokensKey)
-	if allowed, retErr, done := failOpenHandler(start, err, t.failOpen, t.metrics); done {
-		return allowed, retErr
+	tokenVal, err := t.store.Get(ctx, tokensKey)
+	if res, retErr, done := failOpenHandler(start, err, t.failOpen, t.metrics, t.limit); done {
+		return res, retErr
 	}
 	tokens := int64(tokenVal)
 
 	// Load last refill timestamp
-	lastRefillVal, err := t.store.Get(refillKey)
-	if allowed, retErr, done := failOpenHandler(start, err, t.failOpen, t.metrics); done {
-		return allowed, retErr
+	lastRefillVal, err := t.store.Get(ctx, refillKey)
+	if res, retErr, done := failOpenHandler(start, err, t.failOpen, t.metrics, t.limit); done {
+		return res, retErr
 	}
 	lastRefill := int64(lastRefillVal)
 
@@ -79,7 +77,6 @@ func (t *TokenBucketLimiter) Allow(key string) (bool, error) {
 			if tokens > int64(t.limit) {
 				tokens = int64(t.limit)
 			}
-			// advance lastRefill
 			lastRefill += newTokens * t.timePerToken
 		}
 	}
@@ -91,21 +88,38 @@ func (t *TokenBucketLimiter) Allow(key string) (bool, error) {
 	}
 
 	// Persist updated values
-	err = t.store.Set(tokensKey, float64(tokens), t.window)
-	if allowed, retErr, done := failOpenHandler(start, err, t.failOpen, t.metrics); done {
-		return allowed, retErr
+	err = t.store.Set(ctx, tokensKey, float64(tokens), t.window)
+	if res, retErr, done := failOpenHandler(start, err, t.failOpen, t.metrics, t.limit); done {
+		return res, retErr
 	}
-	err = t.store.Set(refillKey, float64(lastRefill), t.window)
-	if allowed, retErr, done := failOpenHandler(start, err, t.failOpen, t.metrics); done {
-		return allowed, retErr
+	err = t.store.Set(ctx, refillKey, float64(lastRefill), t.window)
+	if res, retErr, done := failOpenHandler(start, err, t.failOpen, t.metrics, t.limit); done {
+		return res, retErr
 	}
 
 	t.metrics.ObserveLatency(time.Since(start))
+
+	res := core.Result{
+		Allowed:   allowed,
+		Limit:     t.limit,
+		Remaining: int(tokens),
+	}
+
 	if allowed {
 		t.metrics.IncAllow()
 	} else {
 		t.metrics.IncDeny()
+		// suggested wait time is when the next token will be added
+		res.RetryAfter = time.Duration(t.timePerToken-(now-lastRefill)) * time.Nanosecond
+		if res.RetryAfter < 0 {
+			res.RetryAfter = 0
+		}
 	}
 
-	return allowed, nil
+	return res, nil
+}
+
+// Close releases resources held by the limiter.
+func (t *TokenBucketLimiter) Close() error {
+	return t.store.Close()
 }

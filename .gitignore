@@ -4,6 +4,10 @@
 *.test
 coverage
 coverage.html
+coverage.out
+coverage_report.txt
+
+
 
 # backup & temp files
 *~

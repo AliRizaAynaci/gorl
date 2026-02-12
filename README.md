@@ -29,65 +29,155 @@ GoRL is a high-performance, extensible rate limiter library for Go. It supports 
 * **Key Extraction**: Built-in strategies (IP, API key) or custom
 * **Metrics Collector**: Optional abstraction for counters and histograms, zero-cost when unused
 * **Minimal Dependencies**: Zero external requirements for in-memory mode
-* **Middleware Support**: Ready-made integration examples (e.g., Fiber)
+* **Middleware Support**: Built-in middleware for `net/http`, Fiber, Gin, and Echo
 
 ## Installation
 
 ```bash
-go get github.com/AliRizaAynaci/gorl
+go get github.com/AliRizaAynaci/gorl/v2
 ```
 
 ## Quick Start
 
 ```go
 import (
+  "context"
   "fmt"
   "time"
 
-  "github.com/AliRizaAynaci/gorl"
-  "github.com/AliRizaAynaci/gorl/core"
+  "github.com/AliRizaAynaci/gorl/v2"
+  "github.com/AliRizaAynaci/gorl/v2/core"
 )
 
 func main() {
   limiter, err := gorl.New(core.Config{
     Strategy: core.SlidingWindow,
-    KeyBy:    core.KeyByAPIKey,
     Limit:    5,
     Window:   1 * time.Minute,
-    RedisURL: "redis://localhost:6379/0",
   })
   if err != nil {
     panic(err)
   }
+  defer limiter.Close()
 
+  ctx := context.Background()
   for i := 1; i <= 10; i++ {
-    allowed, _ := limiter.Allow("user-123")
-    fmt.Printf("Request #%d: allowed=%v\n", i, allowed)
+    res, _ := limiter.Allow(ctx, "user-123")
+    fmt.Printf("Request #%d: allowed=%v, remaining=%d\n", i, res.Allowed, res.Remaining)
   }
 }
 ```
 
 ## Usage Examples
 
-### Fiber Middleware (In-Memory Sliding Window)
+### HTTP Middleware (Built-in)
+
+GoRL ships with a ready-to-use `net/http` middleware under `middleware/http`.
+
+**Basic Usage (handler wrapping):**
+
+```go
+import (
+  "net/http"
+
+  "github.com/AliRizaAynaci/gorl/v2"
+  "github.com/AliRizaAynaci/gorl/v2/core"
+  mw "github.com/AliRizaAynaci/gorl/v2/middleware/http"
+)
+
+limiter, _ := gorl.New(core.Config{
+  Strategy: core.SlidingWindow,
+  Limit:    10,
+  Window:   1 * time.Minute,
+})
+
+mux := http.NewServeMux()
+mux.Handle("/api/", mw.RateLimit(limiter, mw.Options{
+  KeyFunc: mw.KeyByIP(),
+}, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+  w.Write([]byte("OK"))
+})))
+
+http.ListenAndServe(":8080", mux)
+```
+
+**Middleware Chaining:**
+
+```go
+rl := mw.NewMiddleware(limiter, mw.Options{
+  KeyFunc: mw.KeyByHeader("X-API-Key"),
+})
+
+mux.Handle("/api/", rl(myHandler))
+```
+
+The middleware automatically sets standard rate-limit headers on every response:
+`RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset`, and `Retry-After`.
+
+**Available Key Extractors:**
+- `mw.KeyByIP()` — client IP (supports `X-Forwarded-For`, `X-Real-Ip`)
+- `mw.KeyByHeader("X-API-Key")` — any request header
+- `mw.KeyByPath()` — IP + request path (per-endpoint limiting)
+
+### Fiber
 
 ```go
 import (
   "github.com/gofiber/fiber/v2"
+  "github.com/AliRizaAynaci/gorl/v2"
+  "github.com/AliRizaAynaci/gorl/v2/core"
+  fibermw "github.com/AliRizaAynaci/gorl/v2/middleware/fiber"
 )
 
-app := fiber.New()
-app.Use(func(c *fiber.Ctx) error {
-  allowed, err := limiter.Allow(c.IP())
-  if err != nil || !allowed {
-    return c.Status(fiber.StatusTooManyRequests).
-      SendString("Rate limit exceeded")
-  }
-  return c.Next()
+limiter, _ := gorl.New(core.Config{
+  Strategy: core.FixedWindow, Limit: 100, Window: time.Minute,
 })
 
+app := fiber.New()
+app.Use(fibermw.RateLimit(limiter)) // key defaults to c.IP()
 app.Listen(":3000")
 ```
+
+### Gin
+
+```go
+import (
+  "github.com/gin-gonic/gin"
+  "github.com/AliRizaAynaci/gorl/v2"
+  "github.com/AliRizaAynaci/gorl/v2/core"
+  ginmw "github.com/AliRizaAynaci/gorl/v2/middleware/gin"
+)
+
+limiter, _ := gorl.New(core.Config{
+  Strategy: core.SlidingWindow, Limit: 100, Window: time.Minute,
+})
+
+r := gin.Default()
+r.Use(ginmw.RateLimit(limiter)) // key defaults to c.ClientIP()
+r.Run(":8080")
+```
+
+### Echo
+
+```go
+import (
+  "github.com/labstack/echo/v4"
+  "github.com/AliRizaAynaci/gorl/v2"
+  "github.com/AliRizaAynaci/gorl/v2/core"
+  echomw "github.com/AliRizaAynaci/gorl/v2/middleware/echo"
+)
+
+limiter, _ := gorl.New(core.Config{
+  Strategy: core.TokenBucket, Limit: 100, Window: time.Minute,
+})
+
+e := echo.New()
+e.Use(echomw.RateLimit(limiter)) // key defaults to c.RealIP()
+e.Start(":8080")
+```
+
+> All framework middlewares automatically set `RateLimit-*` and `Retry-After` headers.
+> Pass a custom `Config{KeyFunc: ...}` to override the default key extraction.
 
 ### Docker & Redis Backend
 
@@ -118,9 +208,10 @@ import (
   "net/http"
   "time"
 
-  "github.com/AliRizaAynaci/gorl"
-  "github.com/AliRizaAynaci/gorl/core"
-  "github.com/AliRizaAynaci/gorl/metrics"
+  "github.com/AliRizaAynaci/gorl/v2"
+  "github.com/AliRizaAynaci/gorl/v2/core"
+  "github.com/AliRizaAynaci/gorl/v2/metrics"
+  mw "github.com/AliRizaAynaci/gorl/v2/middleware/http"
   "github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
@@ -132,7 +223,6 @@ func main() {
   // Initialize limiter with metrics enabled
   limiter, err := gorl.New(core.Config{
     Strategy: core.SlidingWindow,
-    KeyBy:    core.KeyByAPIKey,
     Limit:    5,
     Window:   1 * time.Minute,
     RedisURL: "redis://localhost:6379/0",
@@ -141,19 +231,17 @@ func main() {
   if err != nil {
     log.Fatal(err)
   }
+  defer limiter.Close()
 
   // Expose Prometheus metrics endpoint
   http.Handle("/metrics", promhttp.Handler())
 
-  // Application handler with rate limiting
-  http.HandleFunc("/api", func(w http.ResponseWriter, r *http.Request) {
-    allowed, _ := limiter.Allow(r.Header.Get("X-API-Key"))
-    if !allowed {
-      http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
-      return
-    }
+  // Application handler with rate limiting middleware
+  http.Handle("/api", mw.RateLimitFunc(limiter, mw.Options{
+    KeyFunc: mw.KeyByHeader("X-API-Key"),
+  }, func(w http.ResponseWriter, r *http.Request) {
     w.Write([]byte("OK"))
-  })
+  }))
 
   log.Println("Listening on :8080")
   log.Fatal(http.ListenAndServe(":8080", nil))
@@ -164,47 +252,51 @@ func main() {
 
 Benchmarks run on AMD Ryzen 7 4800H.
 
-| Algorithm      | Single Key (ns/op, B/op, allocs) | Multi Key (ns/op, B/op, allocs) |
-| -------------- | -------------------------------- | ------------------------------- |
-| Fixed Window   | 89.2 ns/op, 24 B/op, 1 alloc     | 202.5 ns/op, 30 B/op, 2 allocs  |
-| Leaky Bucket   | 333.8 ns/op, 112 B/op, 4 allocs  | 506.4 ns/op, 126 B/op, 5 allocs |
-| Sliding Window | 260.5 ns/op, 72 B/op, 3 allocs   | 444.0 ns/op, 86 B/op, 4 allocs  |
-| Token Bucket   | 339.6 ns/op, 128 B/op, 4 allocs  | 504.4 ns/op, 126 B/op, 5 allocs |
+| Algorithm      | Single Key (ns/op, B/op, allocs)     | Multi Key (ns/op, B/op, allocs)      |
+| -------------- | ------------------------------------ | ------------------------------------ |
+| Fixed Window   | 103.8 ns/op, 16 B/op, 1 allocs/op    | 232.5 ns/op, 30 B/op, 2 allocs/op    |
+| Sliding Window | 372.3 ns/op, 64 B/op, 3 allocs/op    | 625.4 ns/op, 86 B/op, 4 allocs/op    |
+| Token Bucket   | 634.4 ns/op, 208 B/op, 8 allocs/op   | 955.8 ns/op, 222 B/op, 9 allocs/op   |
+| Leaky Bucket   | 515.2 ns/op, 208 B/op, 8 allocs/op   | 916.0 ns/op, 222 B/op, 9 allocs/op   |
 
 ## Storage Backends
 
 GoRL's storage layer uses a minimal key-value interface.
 
 ```go
-// Storage defines a minimal interface for rate limiter backends.
-// Implementations only need to support Get, Set, and Incr with TTL.
 package storage
 
-import "time"
+import (
+  "context"
+  "time"
+)
 
 type Storage interface {
   // Incr atomically increments the value at key by 1, initializing to 1 if missing or expired.
-  Incr(key string, ttl time.Duration) (float64, error)
+  Incr(ctx context.Context, key string, ttl time.Duration) (float64, error)
 
   // Get retrieves the numeric value at key, returning 0 if missing or expired.
-  Get(key string) (float64, error)
+  Get(ctx context.Context, key string) (float64, error)
 
   // Set stores the numeric value at key with the specified TTL.
-  Set(key string, val float64, ttl time.Duration) error
+  Set(ctx context.Context, key string, val float64, ttl time.Duration) error
+
+  // Close releases any resources held by the storage backend.
+  Close() error
 }
 ```
 
 ### In-Memory Store
 
-Thread-safe implementation using Go's `sync.Mutex`:
+Lock-free implementation using `sync.Map` and `sync/atomic`:
 
 ```go
 store := inmem.NewInMemoryStore()
 ```
 
 * **Use case**: single-instance and unit tests
-* **Expiration**: TTL on each write, lazy cleanup
-* **Concurrency**: protected by mutex
+* **Expiration**: TTL on each write, background GC cleanup
+* **Concurrency**: lock-free via atomic CAS operations
 
 ### Redis Store
 
@@ -227,15 +319,16 @@ By default, `gorl.New(cfg core.Config)` wires up:
 
 To add any other storage backend (JetStream, DynamoDB, etc.) without forking the repo, follow these steps:
 
-1. **Create** a sub-package `github.com/AliRizaAynaci/gorl/storage/yourmodule` and implement the `storage.Storage` interface:
+1. **Create** a sub-package `github.com/AliRizaAynaci/gorl/v2/storage/yourmodule` and implement the `storage.Storage` interface:
 
    ```go
-   // github.com/AliRizaAynaci/gorl/storage/yourmodule/store.go
+   // github.com/AliRizaAynaci/gorl/v2/storage/yourmodule/store.go
    package yourmodule
 
    import (
+     "context"
      "time"
-     "github.com/AliRizaAynaci/gorl/storage"
+     "github.com/AliRizaAynaci/gorl/v2/storage"
    )
 
    // YourModuleStore holds your connection fields.
@@ -248,14 +341,17 @@ To add any other storage backend (JetStream, DynamoDB, etc.) without forking the
      return &YourModuleStore{/* initialize fields */}
    }
 
-   func (s *YourModuleStore) Incr(key string, ttl time.Duration) (float64, error) {
+   func (s *YourModuleStore) Incr(ctx context.Context, key string, ttl time.Duration) (float64, error) {
      // increment logic
    }
-   func (s *YourModuleStore) Get(key string) (float64, error) {
+   func (s *YourModuleStore) Get(ctx context.Context, key string) (float64, error) {
      // get logic
    }
-   func (s *YourModuleStore) Set(key string, val float64, ttl time.Duration) error {
+   func (s *YourModuleStore) Set(ctx context.Context, key string, val float64, ttl time.Duration) error {
      // set logic
+   }
+   func (s *YourModuleStore) Close() error {
+     // cleanup logic
    }
    ```
 
@@ -304,8 +400,8 @@ To add any other storage backend (JetStream, DynamoDB, etc.) without forking the
    import (
      "log"
      "time"
-     "github.com/AliRizaAynaci/gorl"
-     "github.com/AliRizaAynaci/gorl/core"
+     "github.com/AliRizaAynaci/gorl/v2"
+     "github.com/AliRizaAynaci/gorl/v2/core"
    )
 
    cfg := core.Config{
