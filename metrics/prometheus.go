@@ -3,7 +3,7 @@ package metrics
 import (
 	"time"
 
-	"github.com/AliRizaAynaci/gorl/core"
+	"github.com/AliRizaAynaci/gorl/v2/core"
 	"github.com/prometheus/client_golang/prometheus"
 )
 

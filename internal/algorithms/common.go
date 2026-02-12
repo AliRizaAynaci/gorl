@@ -4,7 +4,7 @@ package algorithms
 import (
 	"time"
 
-	"github.com/AliRizaAynaci/gorl/core"
+	"github.com/AliRizaAynaci/gorl/v2/core"
 )
 
 // failOpenHandler centralizes fail-open logic.
@@ -13,17 +13,17 @@ import (
 //   - failOpen: cfg.FailOpen flag
 //   - m: metrics collector
 //
-// Returns (allowed, retErr, done):
-//   - done=true: caller should return immediately with (allowed, retErr)
+// Returns (result, done):
+//   - done=true: caller should return immediately with (result, retErr)
 //   - done=false: no error, continue normal flow
-func failOpenHandler(start time.Time, err error, failOpen bool, m core.MetricsCollector) (bool, error, bool) {
+func failOpenHandler(start time.Time, err error, failOpen bool, m core.MetricsCollector, limit int) (core.Result, error, bool) {
 	if err == nil {
-		return false, nil, false
+		return core.Result{}, nil, false
 	}
 	if failOpen {
 		m.ObserveLatency(time.Since(start))
 		m.IncAllow()
-		return true, nil, true
+		return core.Result{Allowed: true, Limit: limit}, nil, true
 	}
-	return false, err, true
+	return core.Result{Allowed: false, Limit: limit}, err, true
 }

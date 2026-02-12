@@ -2,10 +2,11 @@
 package algorithms
 
 import (
+	"context"
 	"time"
 
-	"github.com/AliRizaAynaci/gorl/core"
-	"github.com/AliRizaAynaci/gorl/storage"
+	"github.com/AliRizaAynaci/gorl/v2/core"
+	"github.com/AliRizaAynaci/gorl/v2/storage"
 )
 
 // FixedWindowLimiter implements the fixed window rate limiting algorithm.
@@ -32,22 +33,39 @@ func NewFixedWindowLimiter(cfg core.Config, store storage.Storage) core.Limiter 
 }
 
 // Allow checks if a request with the given key is allowed under the fixed window policy.
-func (f *FixedWindowLimiter) Allow(key string) (bool, error) {
+func (f *FixedWindowLimiter) Allow(ctx context.Context, key string) (core.Result, error) {
 	start := time.Now()
 	storageKey := f.prefix + ":" + key
 
-	count, err := f.store.Incr(storageKey, f.window)
-	if allowed, retErr, done := failOpenHandler(start, err, f.failOpen, f.metrics); done {
-		return allowed, retErr
+	count, err := f.store.Incr(ctx, storageKey, f.window)
+	if res, retErr, done := failOpenHandler(start, err, f.failOpen, f.metrics, f.limit); done {
+		return res, retErr
 	}
-	
+
+	remaining := f.limit - int(count)
+	if remaining < 0 {
+		remaining = 0
+	}
+
 	allowed := count <= float64(f.limit)
 	f.metrics.ObserveLatency(time.Since(start))
+
+	res := core.Result{
+		Allowed:   allowed,
+		Limit:     f.limit,
+		Remaining: remaining,
+	}
 
 	if allowed {
 		f.metrics.IncAllow()
 	} else {
 		f.metrics.IncDeny()
+		res.RetryAfter = f.window // Simple fallback for fixed window
 	}
-	return allowed, nil
+	return res, nil
+}
+
+// Close releases resources held by the limiter.
+func (f *FixedWindowLimiter) Close() error {
+	return f.store.Close()
 }

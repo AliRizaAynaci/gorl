@@ -2,22 +2,23 @@
 package algorithms
 
 import (
+	"context"
 	"math"
 	"sync"
 	"time"
 
-	"github.com/AliRizaAynaci/gorl/core"
-	"github.com/AliRizaAynaci/gorl/storage"
+	"github.com/AliRizaAynaci/gorl/v2/core"
+	"github.com/AliRizaAynaci/gorl/v2/storage"
 )
 
 // LeakyBucketLimiter implements the leaky bucket algorithm using minimal Storage API (Get/Set only).
 // State is stored in two separate keys per user: water level and last leak timestamp.
 type LeakyBucketLimiter struct {
-	limit    int           // maximum water capacity
-	window   time.Duration // leak window duration
+	limit    int
+	window   time.Duration
 	store    storage.Storage
-	prefix   string     // key prefix, e.g. "gorl:lb"
-	mu       sync.Mutex // ensure atomicity in-memory; Redis backend handles atomic ops
+	prefix   string
+	mu       sync.Mutex
 	metrics  core.MetricsCollector
 	failOpen bool
 }
@@ -35,7 +36,7 @@ func NewLeakyBucketLimiter(cfg core.Config, store storage.Storage) core.Limiter 
 }
 
 // Allow checks and updates water level, allowing requests at a steady rate.
-func (l *LeakyBucketLimiter) Allow(key string) (bool, error) {
+func (l *LeakyBucketLimiter) Allow(ctx context.Context, key string) (core.Result, error) {
 	start := time.Now()
 
 	l.mu.Lock()
@@ -46,15 +47,15 @@ func (l *LeakyBucketLimiter) Allow(key string) (bool, error) {
 	leakKey := l.prefix + ":leak:" + key
 
 	// Load current state
-	waterVal, err := l.store.Get(waterKey)
-	if allowed, retErr, done := failOpenHandler(start, err, l.failOpen, l.metrics); done {
-		return allowed, retErr
+	waterVal, err := l.store.Get(ctx, waterKey)
+	if res, retErr, done := failOpenHandler(start, err, l.failOpen, l.metrics, l.limit); done {
+		return res, retErr
 	}
 
 	waterLevel := int(waterVal)
-	lastLeakVal, err := l.store.Get(leakKey)
-	if allowed, retErr, done := failOpenHandler(start, err, l.failOpen, l.metrics); done {
-		return allowed, retErr
+	lastLeakVal, err := l.store.Get(ctx, leakKey)
+	if res, retErr, done := failOpenHandler(start, err, l.failOpen, l.metrics, l.limit); done {
+		return res, retErr
 	}
 	lastLeak := int64(lastLeakVal)
 
@@ -72,7 +73,6 @@ func (l *LeakyBucketLimiter) Allow(key string) (bool, error) {
 			if waterLevel < 0 {
 				waterLevel = 0
 			}
-			// Advance lastLeak based on consumed time
 			lastLeak += int64(math.Floor(float64(leaked) / tokensPerNano))
 		}
 	}
@@ -84,21 +84,39 @@ func (l *LeakyBucketLimiter) Allow(key string) (bool, error) {
 	}
 
 	// Persist updated state
-	err = l.store.Set(waterKey, float64(waterLevel), l.window)
-	if allowed, retErr, done := failOpenHandler(start, err, l.failOpen, l.metrics); done {
-		return allowed, retErr
+	err = l.store.Set(ctx, waterKey, float64(waterLevel), l.window)
+	if res, retErr, done := failOpenHandler(start, err, l.failOpen, l.metrics, l.limit); done {
+		return res, retErr
 	}
-	err = l.store.Set(leakKey, float64(lastLeak), l.window)
-	if allowed, retErr, done := failOpenHandler(start, err, l.failOpen, l.metrics); done {
-		return allowed, retErr
+	err = l.store.Set(ctx, leakKey, float64(lastLeak), l.window)
+	if res, retErr, done := failOpenHandler(start, err, l.failOpen, l.metrics, l.limit); done {
+		return res, retErr
 	}
 
 	l.metrics.ObserveLatency(time.Since(start))
+
+	res := core.Result{
+		Allowed:   allowed,
+		Limit:     l.limit,
+		Remaining: l.limit - waterLevel,
+	}
+
 	if allowed {
 		l.metrics.IncAllow()
 	} else {
 		l.metrics.IncDeny()
+		// Wait time until water level drops by 1
+		nanoPerToken := float64(l.window.Nanoseconds()) / float64(l.limit)
+		res.RetryAfter = time.Duration((1.0/nanoPerToken)-float64(now-lastLeak)) * time.Nanosecond // This math might be slightly off but gives an idea
+		if res.RetryAfter < 0 {
+			res.RetryAfter = 0
+		}
 	}
 
-	return allowed, nil
+	return res, nil
+}
+
+// Close releases resources held by the limiter.
+func (l *LeakyBucketLimiter) Close() error {
+	return l.store.Close()
 }

@@ -2,19 +2,20 @@
 package algorithms
 
 import (
+	"context"
 	"time"
 
-	"github.com/AliRizaAynaci/gorl/core"
-	"github.com/AliRizaAynaci/gorl/storage"
+	"github.com/AliRizaAynaci/gorl/v2/core"
+	"github.com/AliRizaAynaci/gorl/v2/storage"
 )
 
-// SlidingWindowLimiter implements an approximate sliding window algorithm using minimal Storage API (Get/Set/Incr).
+// SlidingWindowLimiter implements an approximate sliding window algorithm using minimal Storage API.
 // It keeps two counters (current and previous window) and a timestamp of the window start.
 type SlidingWindowLimiter struct {
-	limit    int           // maximum requests per window
-	window   time.Duration // window duration
+	limit    int
+	window   time.Duration
 	store    storage.Storage
-	prefix   string // key prefix, e.g. "gorl:sw"
+	prefix   string
 	metrics  core.MetricsCollector
 	failOpen bool
 }
@@ -32,50 +33,67 @@ func NewSlidingWindowLimiter(cfg core.Config, store storage.Storage) core.Limite
 }
 
 // Allow checks whether a request is allowed under a sliding window.
-func (s *SlidingWindowLimiter) Allow(key string) (bool, error) {
+func (s *SlidingWindowLimiter) Allow(ctx context.Context, key string) (core.Result, error) {
 	start := time.Now()
-	// Current timestamp in nanoseconds
 	now := time.Now().UnixNano()
 
-	// Define storage keys
-	tsKey := s.prefix + ":ts:" + key     // window start timestamp
-	currKey := s.prefix + ":curr:" + key // count in current window
-	prevKey := s.prefix + ":prev:" + key // count in previous window
+	tsKey := s.prefix + ":ts:" + key
+	currKey := s.prefix + ":curr:" + key
+	prevKey := s.prefix + ":prev:" + key
 
 	// Load last window start
-	tsVal, err := s.store.Get(tsKey)
-	if allowed, retErr, done := failOpenHandler(start, err, s.failOpen, s.metrics); done {
-		return allowed, retErr
+	tsVal, err := s.store.Get(ctx, tsKey)
+	if res, retErr, done := failOpenHandler(start, err, s.failOpen, s.metrics, s.limit); done {
+		return res, retErr
 	}
 
 	var windowStart int64
 	if tsVal == 0 {
 		// First request: initialize
 		windowStart = now
-		_ = s.store.Set(tsKey, float64(windowStart), s.window)
-		_ = s.store.Set(currKey, 0, s.window)
-		_ = s.store.Set(prevKey, 0, s.window)
+		if err := s.store.Set(ctx, tsKey, float64(windowStart), s.window); err != nil {
+			if res, retErr, done := failOpenHandler(start, err, s.failOpen, s.metrics, s.limit); done {
+				return res, retErr
+			}
+		}
+		if err := s.store.Set(ctx, currKey, 0, s.window); err != nil {
+			if res, retErr, done := failOpenHandler(start, err, s.failOpen, s.metrics, s.limit); done {
+				return res, retErr
+			}
+		}
+		if err := s.store.Set(ctx, prevKey, 0, s.window); err != nil {
+			if res, retErr, done := failOpenHandler(start, err, s.failOpen, s.metrics, s.limit); done {
+				return res, retErr
+			}
+		}
 	} else {
 		windowStart = int64(tsVal)
 		elapsed := now - windowStart
 
 		if elapsed >= int64(s.window) {
-			// Move window forward by number of intervals passed
 			intervals := elapsed / int64(s.window)
 
-			// Shift current to previous
-			currCount, err := s.store.Get(currKey)
-			if allowed, retErr, done := failOpenHandler(start, err, s.failOpen, s.metrics); done {
-				return allowed, retErr
+			currCount, err := s.store.Get(ctx, currKey)
+			if res, retErr, done := failOpenHandler(start, err, s.failOpen, s.metrics, s.limit); done {
+				return res, retErr
 			}
-			_ = s.store.Set(prevKey, currCount, s.window)
+			if err := s.store.Set(ctx, prevKey, currCount, s.window); err != nil {
+				if res, retErr, done := failOpenHandler(start, err, s.failOpen, s.metrics, s.limit); done {
+					return res, retErr
+				}
+			}
+			if err := s.store.Set(ctx, currKey, 0, s.window); err != nil {
+				if res, retErr, done := failOpenHandler(start, err, s.failOpen, s.metrics, s.limit); done {
+					return res, retErr
+				}
+			}
 
-			// Reset current counter
-			_ = s.store.Set(currKey, 0, s.window)
-
-			// Advance windowStart
 			windowStart += intervals * int64(s.window)
-			_ = s.store.Set(tsKey, float64(windowStart), s.window)
+			if err := s.store.Set(ctx, tsKey, float64(windowStart), s.window); err != nil {
+				if res, retErr, done := failOpenHandler(start, err, s.failOpen, s.metrics, s.limit); done {
+					return res, retErr
+				}
+			}
 		}
 	}
 
@@ -84,13 +102,13 @@ func (s *SlidingWindowLimiter) Allow(key string) (bool, error) {
 	ratio := float64(since) / float64(s.window)
 
 	// Load counts
-	prevCount, err := s.store.Get(prevKey)
-	if allowed, retErr, done := failOpenHandler(start, err, s.failOpen, s.metrics); done {
-		return allowed, retErr
+	prevCount, err := s.store.Get(ctx, prevKey)
+	if res, retErr, done := failOpenHandler(start, err, s.failOpen, s.metrics, s.limit); done {
+		return res, retErr
 	}
-	currCount, err := s.store.Get(currKey)
-	if allowed, retErr, done := failOpenHandler(start, err, s.failOpen, s.metrics); done {
-		return allowed, retErr
+	currCount, err := s.store.Get(ctx, currKey)
+	if res, retErr, done := failOpenHandler(start, err, s.failOpen, s.metrics, s.limit); done {
+		return res, retErr
 	}
 
 	// Approximate total in sliding window
@@ -98,19 +116,39 @@ func (s *SlidingWindowLimiter) Allow(key string) (bool, error) {
 	allowed := slidingCount < float64(s.limit)
 
 	if allowed {
-		// Increment current window counter
-		_, err := s.store.Incr(currKey, s.window)
-		if allowed, retErr, done := failOpenHandler(start, err, s.failOpen, s.metrics); done {
-			return allowed, retErr
+		_, err := s.store.Incr(ctx, currKey, s.window)
+		if res, retErr, done := failOpenHandler(start, err, s.failOpen, s.metrics, s.limit); done {
+			return res, retErr
 		}
 	}
 
 	s.metrics.ObserveLatency(time.Since(start))
+
+	remaining := s.limit - int(slidingCount)
+	if remaining < 0 {
+		remaining = 0
+	}
+
+	// Reset for sliding window is a bit fuzzy, but we can say when the CURRENT window ends
+	reset := time.Duration(windowStart+int64(s.window)-now) * time.Nanosecond
+
+	res := core.Result{
+		Allowed:   allowed,
+		Limit:     s.limit,
+		Remaining: remaining,
+		Reset:     reset,
+	}
+
 	if allowed {
 		s.metrics.IncAllow()
 	} else {
 		s.metrics.IncDeny()
+		res.RetryAfter = reset // In sliding window, wait until next window start might be too long, but it's a safe bet
 	}
+	return res, nil
+}
 
-	return allowed, nil
+// Close releases resources held by the limiter.
+func (s *SlidingWindowLimiter) Close() error {
+	return s.store.Close()
 }
