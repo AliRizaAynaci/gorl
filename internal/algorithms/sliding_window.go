@@ -3,6 +3,7 @@ package algorithms
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"time"
 
@@ -38,11 +39,19 @@ func NewSlidingWindowLimiter(cfg core.Config, store storage.Storage) core.Limite
 // Allow checks whether a request is allowed under a sliding window.
 func (s *SlidingWindowLimiter) Allow(ctx context.Context, key string) (core.Result, error) {
 	start := time.Now()
+	if runner, ok := s.store.(redisScriptRunner); ok {
+		return s.allowRedis(ctx, start, runner, key)
+	}
+
+	return s.allowGeneric(ctx, start, key)
+}
+
+func (s *SlidingWindowLimiter) allowGeneric(ctx context.Context, start time.Time, key string) (core.Result, error) {
 	now := time.Now().UnixNano()
 
-	tsKey := s.prefix + ":ts:" + key
-	currKey := s.prefix + ":curr:" + key
-	prevKey := s.prefix + ":prev:" + key
+	tsKey := fmt.Sprintf("%s:{%s}:ts", s.prefix, key)
+	currKey := fmt.Sprintf("%s:{%s}:curr", s.prefix, key)
+	prevKey := fmt.Sprintf("%s:{%s}:prev", s.prefix, key)
 
 	// Load last window start
 	tsVal, err := s.store.Get(ctx, tsKey)
@@ -180,6 +189,41 @@ func (s *SlidingWindowLimiter) Allow(ctx context.Context, key string) (core.Resu
 			res.RetryAfter = windowUntilBoundary
 		}
 	}
+	return res, nil
+}
+
+func (s *SlidingWindowLimiter) allowRedis(ctx context.Context, start time.Time, runner redisScriptRunner, key string) (core.Result, error) {
+	keys := []string{
+		fmt.Sprintf("%s:{%s}:ts", s.prefix, key),
+		fmt.Sprintf("%s:{%s}:curr", s.prefix, key),
+		fmt.Sprintf("%s:{%s}:prev", s.prefix, key),
+	}
+
+	values, err := runner.EvalScript(
+		ctx,
+		redisScriptSlidingWindow,
+		keys,
+		int64(s.limit),
+		time.Now().UnixMicro(),
+		durationToMicros(s.window),
+		durationToMilliseconds(s.stateTTL),
+	)
+	if res, retErr, done := failOpenHandler(start, err, s.failOpen, s.metrics, s.limit); done {
+		return res, retErr
+	}
+
+	res, err := buildRedisScriptResult(s.limit, values)
+	if res2, retErr, done := failOpenHandler(start, err, s.failOpen, s.metrics, s.limit); done {
+		return res2, retErr
+	}
+
+	s.metrics.ObserveLatency(time.Since(start))
+	if res.Allowed {
+		s.metrics.IncAllow()
+	} else {
+		s.metrics.IncDeny()
+	}
+
 	return res, nil
 }
 

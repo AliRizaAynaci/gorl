@@ -4,7 +4,7 @@
 
 # GoRL - High-Performance Rate Limiter Library
 
-GoRL is a high-performance, extensible rate limiter library for Go. It supports multiple algorithms, pluggable storage backends, a metrics collector abstraction, and minimal dependencies, making it ideal for both single-instance and distributed systems.
+GoRL is a high-performance, extensible rate limiter library for Go. It supports multiple algorithms, pluggable storage backends, a metrics collector abstraction, and minimal dependencies for both single-instance deployments and Redis-backed shared-state deployments.
 
 ---
 
@@ -26,6 +26,7 @@ GoRL is a high-performance, extensible rate limiter library for Go. It supports 
 
 * **Algorithms**: Fixed Window, Sliding Window, Token Bucket, Leaky Bucket
 * **Storage**: In-memory, Redis, or any custom store (via `Storage` interface)
+* **Atomic Redis Execution**: Built-in Redis-backed limiters use Lua-scripted state transitions
 * **Fail-Open / Fail-Close**: Configurable policy on backend errors
 * **Key Extraction**: Built-in strategies (IP, API key) or custom
 * **Metrics Collector**: Optional abstraction for counters and histograms, zero-cost when unused
@@ -77,6 +78,7 @@ Recommended entry points:
 
 - [Getting Started](docs/guides/getting-started.md)
 - [System Overview](docs/architecture/system-overview.md)
+- [Distributed Semantics](docs/architecture/distributed-semantics.md)
 - [Middleware Guide](docs/guides/middleware.md)
 - [Public API Reference](docs/reference/public-api.md)
 
@@ -263,14 +265,44 @@ func main() {
 
 ## Benchmarks
 
-Benchmarks run on AMD Ryzen 7 4800H.
+Benchmarks below are averages of 3 runs on Apple M4 using:
+
+```bash
+go test ./internal/algorithms -run=^$ -bench=. -benchmem -benchtime=1s -count=3
+```
+
+Redis results were measured against a local `redis:7-alpine` container and
+reflect the Lua-backed atomic execution path.
+
+### In-Memory Backend
 
 | Algorithm      | Single Key (ns/op, B/op, allocs)     | Multi Key (ns/op, B/op, allocs)      |
 | -------------- | ------------------------------------ | ------------------------------------ |
-| Fixed Window   | 103.8 ns/op, 16 B/op, 1 allocs/op    | 232.5 ns/op, 30 B/op, 2 allocs/op    |
-| Sliding Window | 372.3 ns/op, 64 B/op, 3 allocs/op    | 625.4 ns/op, 86 B/op, 4 allocs/op    |
-| Token Bucket   | 634.4 ns/op, 208 B/op, 8 allocs/op   | 955.8 ns/op, 222 B/op, 9 allocs/op   |
-| Leaky Bucket   | 515.2 ns/op, 208 B/op, 8 allocs/op   | 916.0 ns/op, 222 B/op, 9 allocs/op   |
+| Fixed Window   | 217.2 ns/op, 64 B/op, 4 allocs/op    | 268.8 ns/op, 86 B/op, 5 allocs/op    |
+| Sliding Window | 394.8 ns/op, 168 B/op, 9 allocs/op   | 504.2 ns/op, 182 B/op, 10 allocs/op  |
+| Token Bucket   | 467.6 ns/op, 272 B/op, 12 allocs/op  | 546.0 ns/op, 300 B/op, 13 allocs/op  |
+| Leaky Bucket   | 474.7 ns/op, 272 B/op, 12 allocs/op  | 570.0 ns/op, 286 B/op, 13 allocs/op  |
+
+### Redis Backend
+
+| Algorithm      | Single Key (ns/op, B/op, allocs)        | Multi Key (ns/op, B/op, allocs)         |
+| -------------- | --------------------------------------- | --------------------------------------- |
+| Fixed Window   | 100797.0 ns/op, 416 B/op, 17 allocs/op | 103031.7 ns/op, 452 B/op, 17 allocs/op |
+| Sliding Window | 106871.3 ns/op, 912 B/op, 32 allocs/op | 118876.3 ns/op, 970.3 B/op, 33 allocs/op |
+| Token Bucket   | 107571.0 ns/op, 800 B/op, 28 allocs/op | 108520.0 ns/op, 861 B/op, 29 allocs/op |
+| Leaky Bucket   | 103766.0 ns/op, 800 B/op, 28 allocs/op | 111682.3 ns/op, 859 B/op, 29 allocs/op |
+
+### Redis: Before Lua vs After Lua
+
+| Algorithm      | Single Key                             | Multi Key                              |
+| -------------- | -------------------------------------- | -------------------------------------- |
+| Fixed Window   | `178022.0 -> 100797.0 ns/op` `43.4%` faster | `186592.7 -> 103031.7 ns/op` `44.8%` faster |
+| Sliding Window | `457973.7 -> 106871.3 ns/op` `76.7%` faster | `462304.7 -> 118876.3 ns/op` `74.3%` faster |
+| Token Bucket   | `374951.7 -> 107571.0 ns/op` `71.3%` faster | `399340.7 -> 108520.0 ns/op` `72.8%` faster |
+| Leaky Bucket   | `386675.0 -> 103766.0 ns/op` `73.2%` faster | `470074.0 -> 111682.3 ns/op` `76.2%` faster |
+
+These comparisons use the same benchmark command, the same local Redis
+container setup, and 3-run averages before and after the Lua migration.
 
 ## Storage Backends
 
@@ -319,9 +351,23 @@ Scalable store leveraging Redis commands:
 store := redis.NewRedisStore("redis://localhost:6379/0")
 ```
 
-* **Counter**: `INCR` + `EXPIRE`
-* **TTL Management**: reset expire on each write
-* **Use case**: distributed services
+* **Execution**: fixed window uses an atomic counter+TTL script; the other built-in algorithms use algorithm-specific Lua scripts
+* **TTL Management**: handled inside the Redis script path
+* **Use case**: shared state across services
+* **Atomicity**: built-in algorithms use Redis Lua scripts for atomic execution
+
+Current distributed guarantees depend on the selected algorithm.
+
+| Backend + Strategy | Multi-instance status |
+| --- | --- |
+| In-memory + any strategy | single-process only |
+| Redis + Fixed Window | supported atomic shared-state path |
+| Redis + Sliding Window | supported atomic shared-state path |
+| Redis + Token Bucket | supported atomic shared-state path |
+| Redis + Leaky Bucket | supported atomic shared-state path |
+
+See [docs/architecture/distributed-semantics.md](docs/architecture/distributed-semantics.md)
+for the current support matrix and planned direction.
 
 ## Custom Storage Backend
 

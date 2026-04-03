@@ -108,4 +108,5 @@ GoRL keeps request key selection outside the top-level constructor.
 
 - [Middleware Guide](./middleware.md)
 - [Storage and Observability](./storage-and-observability.md)
+- [Distributed Semantics](../architecture/distributed-semantics.md)
 - [System Overview](../architecture/system-overview.md)

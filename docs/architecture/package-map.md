@@ -59,9 +59,10 @@ flowchart LR
 
 ### `storage/redis`
 
-- Provides the distributed backend selected by `RedisURL`.
+- Provides the Redis-backed shared-state backend selected by `RedisURL`.
 - Uses `go-redis/v9`.
 - Keeps its public surface intentionally small.
+- Provides Lua-scripted atomic execution paths used by the built-in algorithms.
 
 ### `middleware/http`
 

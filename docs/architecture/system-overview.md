@@ -90,8 +90,11 @@ At runtime the library starts from `gorl.New(core.Config)`.
 
 These docs reflect the repository as it exists today.
 
-- `storage/redis` provides atomic primitives such as `INCR`, but not every
-  algorithm performs its full state transition atomically across multiple
-  processes.
+- `storage/redis` now provides atomic execution paths for the built-in
+  algorithms, but that guarantee is tied to the repository's Redis backend and
+  its key layout rather than to the generic `storage.Storage` interface.
 - Middleware always emits `RateLimit-*` headers based on `core.Result`, so
   header quality depends on the algorithm's current metadata behavior.
+
+See [Distributed Semantics](./distributed-semantics.md) for the current support
+matrix.
