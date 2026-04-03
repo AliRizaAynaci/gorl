@@ -90,9 +90,9 @@ At runtime the library starts from `gorl.New(core.Config)`.
 
 These docs reflect the repository as it exists today.
 
-- `storage/redis` is not a blanket promise of distributed safety. The current
-  supported shared-state path is `Redis + FixedWindow`; richer algorithms still
-  require stronger atomic state transitions.
+- `storage/redis` now provides atomic execution paths for the built-in
+  algorithms, but that guarantee is tied to the repository's Redis backend and
+  its key layout rather than to the generic `storage.Storage` interface.
 - Middleware always emits `RateLimit-*` headers based on `core.Result`, so
   header quality depends on the algorithm's current metadata behavior.
 

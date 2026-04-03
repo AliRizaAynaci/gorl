@@ -12,7 +12,7 @@ import (
 )
 
 // RedisStore implements the storage.Storage interface using a Redis backend.
-// It provides atomic operations necessary for distributed rate limiting.
+// It also exposes Lua-scripted helpers for atomic multi-key state transitions.
 type RedisStore struct {
 	client *goredis.Client
 }
@@ -41,12 +41,14 @@ func NewRedisStore(redisURL string) (storage.Storage, error) {
 // Incr atomically increments the numeric value at key by 1.
 // If the key is missing or expired, initializes it to 1 and sets TTL.
 func (s *RedisStore) Incr(ctx context.Context, key string, ttl time.Duration) (float64, error) {
-	val, err := s.client.Incr(ctx, key).Result()
+	raw, err := s.runScript(ctx, scriptIncrWithTTL, []string{key}, ttlMilliseconds(ttl))
 	if err != nil {
 		return 0, err
 	}
-	if err := s.client.Expire(ctx, key, ttl).Err(); err != nil {
-		return float64(val), fmt.Errorf("failed to set TTL: %w", err)
+
+	val, err := asInt64(raw)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse increment result: %w", err)
 	}
 	return float64(val), nil
 }

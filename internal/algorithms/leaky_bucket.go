@@ -3,6 +3,7 @@ package algorithms
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"sync"
 	"time"
@@ -38,13 +39,19 @@ func NewLeakyBucketLimiter(cfg core.Config, store storage.Storage) core.Limiter 
 // Allow checks and updates water level, allowing requests at a steady rate.
 func (l *LeakyBucketLimiter) Allow(ctx context.Context, key string) (core.Result, error) {
 	start := time.Now()
+	if runner, ok := l.store.(redisScriptRunner); ok {
+		return l.allowRedis(ctx, start, runner, key)
+	}
 
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	return l.allowGeneric(ctx, start, key)
+}
 
+func (l *LeakyBucketLimiter) allowGeneric(ctx context.Context, start time.Time, key string) (core.Result, error) {
 	now := time.Now().UnixNano()
-	waterKey := l.prefix + ":water:" + key
-	leakKey := l.prefix + ":leak:" + key
+	waterKey := fmt.Sprintf("%s:{%s}:water", l.prefix, key)
+	leakKey := fmt.Sprintf("%s:{%s}:leak", l.prefix, key)
 
 	// Load current state
 	waterVal, err := l.store.Get(ctx, waterKey)
@@ -115,6 +122,40 @@ func (l *LeakyBucketLimiter) Allow(ctx context.Context, key string) (core.Result
 	} else {
 		l.metrics.IncDeny()
 		res.RetryAfter = nextLeak
+	}
+
+	return res, nil
+}
+
+func (l *LeakyBucketLimiter) allowRedis(ctx context.Context, start time.Time, runner redisScriptRunner, key string) (core.Result, error) {
+	keys := []string{
+		fmt.Sprintf("%s:{%s}:water", l.prefix, key),
+		fmt.Sprintf("%s:{%s}:leak", l.prefix, key),
+	}
+
+	values, err := runner.EvalScript(
+		ctx,
+		redisScriptLeakyBucket,
+		keys,
+		int64(l.limit),
+		time.Now().UnixMicro(),
+		durationToMicros(l.window),
+		durationToMilliseconds(l.window),
+	)
+	if res, retErr, done := failOpenHandler(start, err, l.failOpen, l.metrics, l.limit); done {
+		return res, retErr
+	}
+
+	res, err := buildRedisScriptResult(l.limit, values)
+	if res2, retErr, done := failOpenHandler(start, err, l.failOpen, l.metrics, l.limit); done {
+		return res2, retErr
+	}
+
+	l.metrics.ObserveLatency(time.Since(start))
+	if res.Allowed {
+		l.metrics.IncAllow()
+	} else {
+		l.metrics.IncDeny()
 	}
 
 	return res, nil

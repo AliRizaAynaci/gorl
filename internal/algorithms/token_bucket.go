@@ -3,6 +3,7 @@ package algorithms
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -43,12 +44,19 @@ func NewTokenBucketLimiter(cfg core.Config, store storage.Storage) core.Limiter 
 // Allow checks token availability and consumes one token if allowed.
 func (t *TokenBucketLimiter) Allow(ctx context.Context, key string) (core.Result, error) {
 	start := time.Now()
+	if runner, ok := t.store.(redisScriptRunner); ok {
+		return t.allowRedis(ctx, start, runner, key)
+	}
+
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	return t.allowGeneric(ctx, start, key)
+}
 
+func (t *TokenBucketLimiter) allowGeneric(ctx context.Context, start time.Time, key string) (core.Result, error) {
 	now := time.Now().UnixNano()
-	tokensKey := t.prefix + ":tokens:" + key
-	refillKey := t.prefix + ":refill:" + key
+	tokensKey := fmt.Sprintf("%s:{%s}:tokens", t.prefix, key)
+	refillKey := fmt.Sprintf("%s:{%s}:refill", t.prefix, key)
 
 	// Load current token count
 	tokenVal, err := t.store.Get(ctx, tokensKey)
@@ -119,6 +127,40 @@ func (t *TokenBucketLimiter) Allow(ctx context.Context, key string) (core.Result
 	} else {
 		t.metrics.IncDeny()
 		res.RetryAfter = nextTokenDelay
+	}
+
+	return res, nil
+}
+
+func (t *TokenBucketLimiter) allowRedis(ctx context.Context, start time.Time, runner redisScriptRunner, key string) (core.Result, error) {
+	keys := []string{
+		fmt.Sprintf("%s:{%s}:tokens", t.prefix, key),
+		fmt.Sprintf("%s:{%s}:refill", t.prefix, key),
+	}
+
+	values, err := runner.EvalScript(
+		ctx,
+		redisScriptTokenBucket,
+		keys,
+		int64(t.limit),
+		time.Now().UnixMicro(),
+		durationToMilliseconds(t.window),
+		durationToMicros(time.Duration(t.timePerToken)),
+	)
+	if res, retErr, done := failOpenHandler(start, err, t.failOpen, t.metrics, t.limit); done {
+		return res, retErr
+	}
+
+	res, err := buildRedisScriptResult(t.limit, values)
+	if res2, retErr, done := failOpenHandler(start, err, t.failOpen, t.metrics, t.limit); done {
+		return res2, retErr
+	}
+
+	t.metrics.ObserveLatency(time.Since(start))
+	if res.Allowed {
+		t.metrics.IncAllow()
+	} else {
+		t.metrics.IncDeny()
 	}
 
 	return res, nil
