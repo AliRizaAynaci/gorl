@@ -21,9 +21,6 @@ var (
 // StrategyType represents the available rate limiting algorithms.
 type StrategyType string
 
-// KeyFuncType represents how the rate limiter generates a key per request.
-type KeyFuncType string
-
 const (
 	// FixedWindow is the basic fixed window rate limiting algorithm.
 	FixedWindow StrategyType = "fixed_window"
@@ -33,31 +30,15 @@ const (
 	TokenBucket StrategyType = "token_bucket"
 	// LeakyBucket is the leaky bucket algorithm.
 	LeakyBucket StrategyType = "leaky_bucket"
-
-	// KeyByIP limits per remote IP address.
-	KeyByIP KeyFuncType = "ip"
-	// KeyByAPIKey limits per API key (from request header).
-	KeyByAPIKey KeyFuncType = "api_key"
-	// KeyByToken limits per bearer token.
-	KeyByToken KeyFuncType = "token"
-	// KeyByCustom allows a user-defined key function.
-	KeyByCustom KeyFuncType = "custom"
 )
-
-// KeyExtractor defines the function signature for custom key extraction.
-type KeyExtractor func(ctx interface{}) string
 
 // Config holds the configuration for creating a rate limiter.
 type Config struct {
-	Strategy  StrategyType  // Rate limiting algorithm to use
-	KeyBy     KeyFuncType   // Keying strategy for limiting
-	Limit     int           // Maximum allowed requests/tokens per window
-	Window    time.Duration // Time window duration
-	RedisURL  string        // Redis connection string for distributed mode
-	HeaderKey string        // Optional: header key for API keys/tokens
-	FailOpen  bool          // If true, allow requests when backend is unavailable
-	// CustomKeyExtractor is an optional function for custom rate limiting key generation.
-	CustomKeyExtractor KeyExtractor
+	Strategy StrategyType  // Rate limiting algorithm to use
+	Limit    int           // Maximum allowed requests/tokens per window
+	Window   time.Duration // Time window duration
+	RedisURL string        // Redis connection string for distributed mode
+	FailOpen bool          // If true, allow requests when backend is unavailable
 	// Optional: metrics collector (nil → NoopMetrics)
 	Metrics MetricsCollector
 }

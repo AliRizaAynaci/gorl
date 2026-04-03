@@ -84,21 +84,6 @@ func TestStrategyTypeConstants(t *testing.T) {
 	}
 }
 
-func TestKeyFuncTypeConstants(t *testing.T) {
-	if KeyByIP != "ip" {
-		t.Errorf("expected ip, got %s", KeyByIP)
-	}
-	if KeyByAPIKey != "api_key" {
-		t.Errorf("expected api_key, got %s", KeyByAPIKey)
-	}
-	if KeyByToken != "token" {
-		t.Errorf("expected token, got %s", KeyByToken)
-	}
-	if KeyByCustom != "custom" {
-		t.Errorf("expected custom, got %s", KeyByCustom)
-	}
-}
-
 func TestErrorVariables(t *testing.T) {
 	if ErrBackendUnavailable == nil {
 		t.Error("ErrBackendUnavailable should not be nil")

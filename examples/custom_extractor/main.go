@@ -1,4 +1,4 @@
-// Package main demonstrates using a custom key extractor with the rate limiter.
+// Package main demonstrates building a custom application key before calling the limiter.
 package main
 
 import (
@@ -10,18 +10,12 @@ import (
 	"github.com/AliRizaAynaci/gorl/v2/core"
 )
 
-// main runs a simple demonstration of the rate limiter with a custom key extractor.
+// main runs a simple demonstration of custom key generation in application code.
 func main() {
-	customExtractor := func(ctx interface{}) string {
-		return ctx.(string)
-	}
-
 	limiter, err := gorl.New(core.Config{
-		Strategy:           core.LeakyBucket,
-		KeyBy:              core.KeyByCustom,
-		Limit:              2,
-		Window:             5 * time.Second,
-		CustomKeyExtractor: customExtractor,
+		Strategy: core.LeakyBucket,
+		Limit:    2,
+		Window:   5 * time.Second,
 	})
 	if err != nil {
 		panic(err)
@@ -29,10 +23,20 @@ func main() {
 	defer limiter.Close()
 
 	ctx := context.Background()
-	users := []string{"user-123", "user-456", "user-123", "user-123"}
-	for i, user := range users {
-		res, err := limiter.Allow(ctx, user)
-		fmt.Printf("Req %d - User: %s, allowed=%v, remaining=%d, err=%v\n", 
-			i+1, user, res.Allowed, res.Remaining, err)
+	tenantUsers := []struct {
+		tenant string
+		user   string
+	}{
+		{tenant: "team-a", user: "user-123"},
+		{tenant: "team-b", user: "user-456"},
+		{tenant: "team-a", user: "user-123"},
+		{tenant: "team-a", user: "user-123"},
+	}
+
+	for i, item := range tenantUsers {
+		key := item.tenant + ":" + item.user
+		res, err := limiter.Allow(ctx, key)
+		fmt.Printf("Req %d - Key: %s, allowed=%v, remaining=%d, err=%v\n",
+			i+1, key, res.Allowed, res.Remaining, err)
 	}
 }

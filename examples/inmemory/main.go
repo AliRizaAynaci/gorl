@@ -14,7 +14,6 @@ import (
 func main() {
 	limiter, err := gorl.New(core.Config{
 		Strategy: core.TokenBucket,
-		KeyBy:    core.KeyByIP,
 		Limit:    3,
 		Window:   10 * time.Second,
 	})
