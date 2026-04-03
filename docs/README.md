@@ -6,6 +6,7 @@ This directory contains library-focused documentation for GoRL.
 
 - [Getting Started](./guides/getting-started.md)
 - [System Overview](./architecture/system-overview.md)
+- [Distributed Semantics](./architecture/distributed-semantics.md)
 - [Request Lifecycle](./architecture/request-lifecycle.md)
 - [Middleware Guide](./guides/middleware.md)
 - [Storage and Observability](./guides/storage-and-observability.md)
@@ -18,11 +19,13 @@ This directory contains library-focused documentation for GoRL.
    core runtime model.
 2. Read [System Overview](./architecture/system-overview.md) to understand how
    the packages connect.
-3. Read [Middleware Guide](./guides/middleware.md) if you plan to use GoRL in a
+3. Read [Distributed Semantics](./architecture/distributed-semantics.md) before
+   using Redis in a multi-instance deployment.
+4. Read [Middleware Guide](./guides/middleware.md) if you plan to use GoRL in a
    web service.
-4. Read [Storage and Observability](./guides/storage-and-observability.md) if
+5. Read [Storage and Observability](./guides/storage-and-observability.md) if
    you need Redis or Prometheus integration.
-5. Use [Public API Reference](./reference/public-api.md) as the package-level
+6. Use [Public API Reference](./reference/public-api.md) as the package-level
    lookup page while implementing.
 
 ## Documentation Conventions

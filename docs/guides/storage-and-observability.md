@@ -45,11 +45,21 @@ Characteristics:
 - selected automatically by the top-level constructor,
 - depends on `go-redis/v9`.
 
-### Current Caveat
+### Current Support Matrix
 
-The storage backend exposes atomic Redis primitives, but not every algorithm
-performs its full state transition atomically across multiple processes. That
-matters if you need strict distributed correctness.
+| Strategy | Redis multi-instance status |
+| --- | --- |
+| `FixedWindow` | supported shared-state option today |
+| `SlidingWindow` | not distributed-safe today |
+| `TokenBucket` | not distributed-safe today |
+| `LeakyBucket` | not distributed-safe today |
+
+The Redis backend exposes useful primitives, but not every algorithm performs
+its full state transition atomically across multiple processes. That matters if
+you need strict distributed correctness.
+
+Read [Distributed Semantics](../architecture/distributed-semantics.md) before
+choosing a Redis-backed deployment shape.
 
 ## Metrics Interface
 
@@ -84,6 +94,9 @@ limiter, err := gorl.New(core.Config{
 ## Operational Advice
 
 - Use the in-memory store for local development and fast tests.
-- Use Redis only after deciding what consistency guarantees you need.
+- Use Redis with `FixedWindow` when you need the repository's current supported
+  shared-state path.
+- Treat Redis with `SlidingWindow`, `TokenBucket`, or `LeakyBucket` as
+  single-instance friendly until a stronger atomic execution path exists.
 - Keep metrics optional at first; add them once you need production visibility.
 - Treat `FailOpen` as an application policy decision, not just a technical one.

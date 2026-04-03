@@ -90,8 +90,11 @@ At runtime the library starts from `gorl.New(core.Config)`.
 
 These docs reflect the repository as it exists today.
 
-- `storage/redis` provides atomic primitives such as `INCR`, but not every
-  algorithm performs its full state transition atomically across multiple
-  processes.
+- `storage/redis` is not a blanket promise of distributed safety. The current
+  supported shared-state path is `Redis + FixedWindow`; richer algorithms still
+  require stronger atomic state transitions.
 - Middleware always emits `RateLimit-*` headers based on `core.Result`, so
   header quality depends on the algorithm's current metadata behavior.
+
+See [Distributed Semantics](./distributed-semantics.md) for the current support
+matrix.

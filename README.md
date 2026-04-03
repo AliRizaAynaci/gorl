@@ -4,7 +4,7 @@
 
 # GoRL - High-Performance Rate Limiter Library
 
-GoRL is a high-performance, extensible rate limiter library for Go. It supports multiple algorithms, pluggable storage backends, a metrics collector abstraction, and minimal dependencies, making it ideal for both single-instance and distributed systems.
+GoRL is a high-performance, extensible rate limiter library for Go. It supports multiple algorithms, pluggable storage backends, a metrics collector abstraction, and minimal dependencies for both single-instance deployments and Redis-backed shared-state deployments.
 
 ---
 
@@ -77,6 +77,7 @@ Recommended entry points:
 
 - [Getting Started](docs/guides/getting-started.md)
 - [System Overview](docs/architecture/system-overview.md)
+- [Distributed Semantics](docs/architecture/distributed-semantics.md)
 - [Middleware Guide](docs/guides/middleware.md)
 - [Public API Reference](docs/reference/public-api.md)
 
@@ -321,7 +322,20 @@ store := redis.NewRedisStore("redis://localhost:6379/0")
 
 * **Counter**: `INCR` + `EXPIRE`
 * **TTL Management**: reset expire on each write
-* **Use case**: distributed services
+* **Use case**: shared state across services
+
+Current distributed guarantees depend on the selected algorithm.
+
+| Backend + Strategy | Multi-instance status |
+| --- | --- |
+| In-memory + any strategy | single-process only |
+| Redis + Fixed Window | supported shared-state option today |
+| Redis + Sliding Window | not distributed-safe today |
+| Redis + Token Bucket | not distributed-safe today |
+| Redis + Leaky Bucket | not distributed-safe today |
+
+See [docs/architecture/distributed-semantics.md](docs/architecture/distributed-semantics.md)
+for the current support matrix and planned direction.
 
 ## Custom Storage Backend
 

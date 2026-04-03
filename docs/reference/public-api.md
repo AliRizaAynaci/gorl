@@ -38,6 +38,10 @@ type Config struct {
 `Config` now contains only constructor-level runtime settings. Request key
 selection belongs to the caller or to middleware adapters.
 
+Setting `RedisURL` selects the Redis backend, but distributed guarantees still
+depend on the chosen strategy. See
+[Distributed Semantics](../architecture/distributed-semantics.md).
+
 ## `core.Limiter`
 
 ```go
