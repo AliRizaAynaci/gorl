@@ -15,6 +15,7 @@ import (
 type SlidingWindowLimiter struct {
 	limit    int
 	window   time.Duration
+	stateTTL time.Duration
 	store    storage.Storage
 	prefix   string
 	metrics  core.MetricsCollector
@@ -26,6 +27,7 @@ func NewSlidingWindowLimiter(cfg core.Config, store storage.Storage) core.Limite
 	return &SlidingWindowLimiter{
 		limit:    cfg.Limit,
 		window:   cfg.Window,
+		stateTTL: 2 * cfg.Window,
 		store:    store,
 		prefix:   "gorl:sw",
 		metrics:  cfg.Metrics,
@@ -52,17 +54,17 @@ func (s *SlidingWindowLimiter) Allow(ctx context.Context, key string) (core.Resu
 	if tsVal == 0 {
 		// First request: initialize
 		windowStart = now
-		if err := s.store.Set(ctx, tsKey, float64(windowStart), s.window); err != nil {
+		if err := s.store.Set(ctx, tsKey, float64(windowStart), s.stateTTL); err != nil {
 			if res, retErr, done := failOpenHandler(start, err, s.failOpen, s.metrics, s.limit); done {
 				return res, retErr
 			}
 		}
-		if err := s.store.Set(ctx, currKey, 0, s.window); err != nil {
+		if err := s.store.Set(ctx, currKey, 0, s.stateTTL); err != nil {
 			if res, retErr, done := failOpenHandler(start, err, s.failOpen, s.metrics, s.limit); done {
 				return res, retErr
 			}
 		}
-		if err := s.store.Set(ctx, prevKey, 0, s.window); err != nil {
+		if err := s.store.Set(ctx, prevKey, 0, s.stateTTL); err != nil {
 			if res, retErr, done := failOpenHandler(start, err, s.failOpen, s.metrics, s.limit); done {
 				return res, retErr
 			}
@@ -78,19 +80,23 @@ func (s *SlidingWindowLimiter) Allow(ctx context.Context, key string) (core.Resu
 			if res, retErr, done := failOpenHandler(start, err, s.failOpen, s.metrics, s.limit); done {
 				return res, retErr
 			}
-			if err := s.store.Set(ctx, prevKey, currCount, s.window); err != nil {
+			nextPrevCount := 0.0
+			if intervals == 1 {
+				nextPrevCount = currCount
+			}
+			if err := s.store.Set(ctx, prevKey, nextPrevCount, s.stateTTL); err != nil {
 				if res, retErr, done := failOpenHandler(start, err, s.failOpen, s.metrics, s.limit); done {
 					return res, retErr
 				}
 			}
-			if err := s.store.Set(ctx, currKey, 0, s.window); err != nil {
+			if err := s.store.Set(ctx, currKey, 0, s.stateTTL); err != nil {
 				if res, retErr, done := failOpenHandler(start, err, s.failOpen, s.metrics, s.limit); done {
 					return res, retErr
 				}
 			}
 
 			windowStart += intervals * int64(s.window)
-			if err := s.store.Set(ctx, tsKey, float64(windowStart), s.window); err != nil {
+			if err := s.store.Set(ctx, tsKey, float64(windowStart), s.stateTTL); err != nil {
 				if res, retErr, done := failOpenHandler(start, err, s.failOpen, s.metrics, s.limit); done {
 					return res, retErr
 				}
@@ -119,7 +125,7 @@ func (s *SlidingWindowLimiter) Allow(ctx context.Context, key string) (core.Resu
 	slidingCountAfter := slidingCount
 
 	if allowed {
-		_, err := s.store.Incr(ctx, currKey, s.window)
+		_, err := s.store.Incr(ctx, currKey, s.stateTTL)
 		if res, retErr, done := failOpenHandler(start, err, s.failOpen, s.metrics, s.limit); done {
 			return res, retErr
 		}
