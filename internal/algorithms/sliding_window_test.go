@@ -165,6 +165,76 @@ func TestSlidingWindow_ResultMetadata(t *testing.T) {
 	}
 }
 
+func TestSlidingWindow_SingleWindowBoundaryRetainsPreviousBucket(t *testing.T) {
+	store := inmem.NewInMemoryStore()
+	defer store.Close()
+	limiter := NewSlidingWindowLimiter(core.Config{
+		Limit: 2, Window: 100 * time.Millisecond, Metrics: &core.NoopMetrics{},
+	}, store)
+	ctx := context.Background()
+
+	for i := 0; i < 2; i++ {
+		res, err := limiter.Allow(ctx, "boundary")
+		if err != nil || !res.Allowed {
+			t.Fatalf("initial request %d should be allowed, got allowed=%v err=%v", i+1, res.Allowed, err)
+		}
+	}
+
+	time.Sleep(110 * time.Millisecond)
+
+	firstAfterBoundary, err := limiter.Allow(ctx, "boundary")
+	if err != nil {
+		t.Fatalf("unexpected error after boundary: %v", err)
+	}
+	if !firstAfterBoundary.Allowed {
+		t.Fatal("first request after crossing into the next window should still be allowed")
+	}
+
+	secondAfterBoundary, err := limiter.Allow(ctx, "boundary")
+	if err != nil {
+		t.Fatalf("unexpected error on second request after boundary: %v", err)
+	}
+	if secondAfterBoundary.Allowed {
+		t.Fatal("second request after a slight boundary crossing should be denied because previous bucket weight still matters")
+	}
+}
+
+func TestSlidingWindow_MultiWindowJumpDropsStalePreviousBucket(t *testing.T) {
+	store := inmem.NewInMemoryStore()
+	defer store.Close()
+	limiter := NewSlidingWindowLimiter(core.Config{
+		Limit: 2, Window: 100 * time.Millisecond, Metrics: &core.NoopMetrics{},
+	}, store)
+	ctx := context.Background()
+
+	for i := 0; i < 2; i++ {
+		res, err := limiter.Allow(ctx, "jump")
+		if err != nil || !res.Allowed {
+			t.Fatalf("initial request %d should be allowed, got allowed=%v err=%v", i+1, res.Allowed, err)
+		}
+	}
+
+	time.Sleep(220 * time.Millisecond)
+
+	for i := 0; i < 2; i++ {
+		res, err := limiter.Allow(ctx, "jump")
+		if err != nil {
+			t.Fatalf("unexpected error after multi-window jump on request %d: %v", i+1, err)
+		}
+		if !res.Allowed {
+			t.Fatalf("request %d after multi-window jump should be allowed, got denied", i+1)
+		}
+	}
+
+	denied, err := limiter.Allow(ctx, "jump")
+	if err != nil {
+		t.Fatalf("unexpected error on third post-jump request: %v", err)
+	}
+	if denied.Allowed {
+		t.Fatal("third request after multi-window jump should be denied because stale traffic must be dropped and capacity recalculated fresh")
+	}
+}
+
 // --- Set Error Handling ---
 
 func TestSlidingWindow_SetError_FailOpen(t *testing.T) {
