@@ -173,8 +173,10 @@ func setRateLimitHeaders(w http.ResponseWriter, res core.Result) {
 	w.Header().Set("RateLimit-Limit", fmt.Sprintf("%d", res.Limit))
 	w.Header().Set("RateLimit-Remaining", fmt.Sprintf("%d", res.Remaining))
 
-	resetSec := int(math.Ceil(res.Reset.Seconds()))
-	w.Header().Set("RateLimit-Reset", fmt.Sprintf("%d", resetSec))
+	if res.Reset > 0 {
+		resetSec := int(math.Ceil(res.Reset.Seconds()))
+		w.Header().Set("RateLimit-Reset", fmt.Sprintf("%d", resetSec))
+	}
 
 	if !res.Allowed && res.RetryAfter > 0 {
 		retrySec := int(math.Ceil(res.RetryAfter.Seconds()))

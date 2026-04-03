@@ -168,6 +168,40 @@ func TestFixedWindow_MetricsRecording(t *testing.T) {
 	}
 }
 
+func TestFixedWindow_ResultMetadata(t *testing.T) {
+	store := inmem.NewInMemoryStore()
+	defer store.Close()
+	limiter := NewFixedWindowLimiter(core.Config{
+		Limit: 1, Window: 200 * time.Millisecond, Metrics: &core.NoopMetrics{},
+	}, store)
+	ctx := context.Background()
+
+	allowed, err := limiter.Allow(ctx, "meta")
+	if err != nil {
+		t.Fatalf("unexpected error on allowed request: %v", err)
+	}
+	if !allowed.Allowed {
+		t.Fatal("first request should be allowed")
+	}
+	if allowed.Remaining != 0 {
+		t.Fatalf("expected remaining=0 after consuming capacity, got %d", allowed.Remaining)
+	}
+	if allowed.Reset <= 0 {
+		t.Fatalf("expected positive reset, got %v", allowed.Reset)
+	}
+
+	denied, err := limiter.Allow(ctx, "meta")
+	if err != nil {
+		t.Fatalf("unexpected error on denied request: %v", err)
+	}
+	if denied.Allowed {
+		t.Fatal("second request should be denied")
+	}
+	if denied.RetryAfter <= 0 {
+		t.Fatalf("expected positive retry_after, got %v", denied.RetryAfter)
+	}
+}
+
 // BenchmarkFixedWindow_SingleKey benchmarks the performance of the Fixed Window limiter with a single key.
 func BenchmarkFixedWindow_SingleKey(b *testing.B) {
 	b.ReportAllocs()

@@ -3,6 +3,7 @@ package algorithms
 
 import (
 	"context"
+	"math"
 	"time"
 
 	"github.com/AliRizaAynaci/gorl/v2/core"
@@ -111,26 +112,36 @@ func (s *SlidingWindowLimiter) Allow(ctx context.Context, key string) (core.Resu
 		return res, retErr
 	}
 
-	// Approximate total in sliding window
+	// Approximate total in sliding window before handling the current request.
 	slidingCount := prevCount*(1-ratio) + currCount
 	allowed := slidingCount < float64(s.limit)
+	currCountAfter := currCount
+	slidingCountAfter := slidingCount
 
 	if allowed {
 		_, err := s.store.Incr(ctx, currKey, s.window)
 		if res, retErr, done := failOpenHandler(start, err, s.failOpen, s.metrics, s.limit); done {
 			return res, retErr
 		}
+		currCountAfter++
+		slidingCountAfter++
 	}
 
 	s.metrics.ObserveLatency(time.Since(start))
 
-	remaining := s.limit - int(slidingCount)
+	remaining := int(float64(s.limit) - slidingCountAfter)
 	if remaining < 0 {
 		remaining = 0
 	}
 
-	// Reset for sliding window is a bit fuzzy, but we can say when the CURRENT window ends
-	reset := time.Duration(windowStart+int64(s.window)-now) * time.Nanosecond
+	windowUntilBoundary := clampDuration(time.Duration(int64(s.window)-since) * time.Nanosecond)
+	reset := time.Duration(0)
+	switch {
+	case currCountAfter > 0:
+		reset = clampDuration(time.Duration(2*int64(s.window)-since) * time.Nanosecond)
+	case prevCount > 0:
+		reset = windowUntilBoundary
+	}
 
 	res := core.Result{
 		Allowed:   allowed,
@@ -143,7 +154,25 @@ func (s *SlidingWindowLimiter) Allow(ctx context.Context, key string) (core.Resu
 		s.metrics.IncAllow()
 	} else {
 		s.metrics.IncDeny()
-		res.RetryAfter = reset // In sliding window, wait until next window start might be too long, but it's a safe bet
+		switch {
+		case currCount >= float64(s.limit):
+			res.RetryAfter = windowUntilBoundary
+		case prevCount > 0:
+			requiredRatio := 1 - (float64(s.limit)-currCount)/prevCount
+			delayRatio := requiredRatio - ratio
+			if delayRatio < 0 {
+				delayRatio = 0
+			}
+			res.RetryAfter = clampDuration(time.Duration(math.Ceil(delayRatio*float64(s.window.Nanoseconds()))) * time.Nanosecond)
+			if res.RetryAfter == 0 {
+				res.RetryAfter = time.Nanosecond
+			}
+			if res.RetryAfter > windowUntilBoundary {
+				res.RetryAfter = windowUntilBoundary
+			}
+		default:
+			res.RetryAfter = windowUntilBoundary
+		}
 	}
 	return res, nil
 }

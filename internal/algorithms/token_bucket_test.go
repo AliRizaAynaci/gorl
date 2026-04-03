@@ -253,6 +253,48 @@ func TestTokenBucket_NoRefillSmallElapsed(t *testing.T) {
 	}
 }
 
+func TestTokenBucket_ResultMetadata(t *testing.T) {
+	store := inmem.NewInMemoryStore()
+	defer store.Close()
+	limiter := NewTokenBucketLimiter(core.Config{
+		Limit: 2, Window: 200 * time.Millisecond, Metrics: &core.NoopMetrics{},
+	}, store)
+	ctx := context.Background()
+
+	first, err := limiter.Allow(ctx, "meta")
+	if err != nil {
+		t.Fatalf("unexpected error on first request: %v", err)
+	}
+	if !first.Allowed {
+		t.Fatal("first request should be allowed")
+	}
+	if first.Remaining != 1 {
+		t.Fatalf("expected remaining=1, got %d", first.Remaining)
+	}
+	if first.Reset <= 0 {
+		t.Fatalf("expected positive reset, got %v", first.Reset)
+	}
+
+	second, _ := limiter.Allow(ctx, "meta")
+	if second.Remaining != 0 {
+		t.Fatalf("expected remaining=0 after second request, got %d", second.Remaining)
+	}
+
+	denied, err := limiter.Allow(ctx, "meta")
+	if err != nil {
+		t.Fatalf("unexpected error on denied request: %v", err)
+	}
+	if denied.Allowed {
+		t.Fatal("third request should be denied")
+	}
+	if denied.RetryAfter <= 0 {
+		t.Fatalf("expected positive retry_after, got %v", denied.RetryAfter)
+	}
+	if denied.Reset < denied.RetryAfter {
+		t.Fatalf("expected reset to be at least retry_after, got reset=%v retry_after=%v", denied.Reset, denied.RetryAfter)
+	}
+}
+
 func TestTokenBucket_Close(t *testing.T) {
 	store := inmem.NewInMemoryStore()
 	limiter := NewTokenBucketLimiter(core.Config{

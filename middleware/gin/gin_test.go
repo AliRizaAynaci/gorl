@@ -95,3 +95,23 @@ func TestRateLimit_CustomKeyFunc(t *testing.T) {
 		t.Errorf("expected key 'test-key-123', got '%s'", capturedKey)
 	}
 }
+
+func TestRateLimit_OmitsZeroDurationHeaders(t *testing.T) {
+	limiter := &mockLimiter{result: core.Result{
+		Allowed: false, Limit: 10, Remaining: 0,
+	}}
+	r := gin.New()
+	r.Use(RateLimit(limiter))
+	r.GET("/", func(c *gin.Context) { t.Fatal("should not reach handler") })
+
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	if rec.Header().Get("RateLimit-Reset") != "" {
+		t.Fatalf("expected RateLimit-Reset to be omitted, got %q", rec.Header().Get("RateLimit-Reset"))
+	}
+	if rec.Header().Get("Retry-After") != "" {
+		t.Fatalf("expected Retry-After to be omitted, got %q", rec.Header().Get("Retry-After"))
+	}
+}

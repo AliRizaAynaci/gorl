@@ -92,7 +92,9 @@ func RateLimit(limiter core.Limiter, cfg ...Config) gin.HandlerFunc {
 func setHeaders(c *gin.Context, res core.Result) {
 	c.Header("RateLimit-Limit", fmt.Sprintf("%d", res.Limit))
 	c.Header("RateLimit-Remaining", fmt.Sprintf("%d", res.Remaining))
-	c.Header("RateLimit-Reset", fmt.Sprintf("%d", int(math.Ceil(res.Reset.Seconds()))))
+	if res.Reset > 0 {
+		c.Header("RateLimit-Reset", fmt.Sprintf("%d", int(math.Ceil(res.Reset.Seconds()))))
+	}
 	if !res.Allowed && res.RetryAfter > 0 {
 		c.Header("Retry-After", fmt.Sprintf("%d", int(math.Ceil(res.RetryAfter.Seconds()))))
 	}

@@ -7,6 +7,13 @@ import (
 	"github.com/AliRizaAynaci/gorl/v2/core"
 )
 
+func clampDuration(d time.Duration) time.Duration {
+	if d < 0 {
+		return 0
+	}
+	return d
+}
+
 // failOpenHandler centralizes fail-open logic.
 //   - start: timestamp when Allow began (for latency metrics)
 //   - err: storage/algorithm error

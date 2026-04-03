@@ -58,9 +58,9 @@ func (c Config) Validate() error {
 type Result struct {
 	Allowed    bool          // True if the request is permitted
 	Limit      int           // Total capacity configured
-	Remaining  int           // Current remaining capacity
-	Reset      time.Duration // Time until the next full reset or refill
-	RetryAfter time.Duration // Time to wait before the next allowed request (if denied)
+	Remaining  int           // Remaining whole-request capacity after this decision
+	Reset      time.Duration // Time until the limiter fully resets or refills if no further requests are made
+	RetryAfter time.Duration // Earliest reliable delay before the next denied request may be allowed again
 }
 
 // Limiter defines the interface that all rate limiting strategies must implement.

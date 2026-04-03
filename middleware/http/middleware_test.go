@@ -229,3 +229,27 @@ func TestRateLimit_HeadersDisabled(t *testing.T) {
 		t.Error("headers should not be set when disabled")
 	}
 }
+
+func TestRateLimit_OmitsZeroDurationHeaders(t *testing.T) {
+	limiter := &mockLimiter{result: core.Result{
+		Allowed: false, Limit: 10, Remaining: 0,
+	}}
+
+	handler := RateLimit(limiter, Options{KeyFunc: KeyByIP()},
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			t.Fatal("handler should not be called when denied")
+		}),
+	)
+
+	req := httptest.NewRequest("GET", "/api", nil)
+	req.RemoteAddr = "10.0.0.1:9999"
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Header().Get("RateLimit-Reset") != "" {
+		t.Fatalf("expected RateLimit-Reset to be omitted, got %q", rec.Header().Get("RateLimit-Reset"))
+	}
+	if rec.Header().Get("Retry-After") != "" {
+		t.Fatalf("expected Retry-After to be omitted, got %q", rec.Header().Get("Retry-After"))
+	}
+}

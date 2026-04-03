@@ -63,12 +63,12 @@ type Result struct {
 
 - `Allowed`: whether the request may proceed
 - `Limit`: configured capacity
-- `Remaining`: remaining capacity reported by the algorithm
-- `Reset`: time until the algorithm reports a reset/refill boundary
-- `RetryAfter`: suggested wait time when denied
+- `Remaining`: remaining whole-request capacity after the current decision
+- `Reset`: time until the limiter fully resets or refills if no more requests arrive
+- `RetryAfter`: earliest reliable delay before a denied request may be allowed
 
-Consumers should note that metadata quality depends on the current algorithm
-implementation.
+Middleware adapters should emit duration-based headers only when these values
+are positive and reliable for the current result.
 
 ## Strategies
 
