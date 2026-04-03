@@ -87,6 +87,14 @@ func (t *TokenBucketLimiter) Allow(ctx context.Context, key string) (core.Result
 		tokens--
 	}
 
+	elapsedSinceRefill := now - lastRefill
+	nextTokenDelay := clampDuration(time.Duration(t.timePerToken-elapsedSinceRefill) * time.Nanosecond)
+	missingTokens := int64(t.limit) - tokens
+	reset := time.Duration(0)
+	if missingTokens > 0 {
+		reset = clampDuration(time.Duration(missingTokens*t.timePerToken-elapsedSinceRefill) * time.Nanosecond)
+	}
+
 	// Persist updated values
 	err = t.store.Set(ctx, tokensKey, float64(tokens), t.window)
 	if res, retErr, done := failOpenHandler(start, err, t.failOpen, t.metrics, t.limit); done {
@@ -103,17 +111,14 @@ func (t *TokenBucketLimiter) Allow(ctx context.Context, key string) (core.Result
 		Allowed:   allowed,
 		Limit:     t.limit,
 		Remaining: int(tokens),
+		Reset:     reset,
 	}
 
 	if allowed {
 		t.metrics.IncAllow()
 	} else {
 		t.metrics.IncDeny()
-		// suggested wait time is when the next token will be added
-		res.RetryAfter = time.Duration(t.timePerToken-(now-lastRefill)) * time.Nanosecond
-		if res.RetryAfter < 0 {
-			res.RetryAfter = 0
-		}
+		res.RetryAfter = nextTokenDelay
 	}
 
 	return res, nil

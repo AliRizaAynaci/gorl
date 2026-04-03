@@ -84,11 +84,11 @@ Middleware adapters currently write these headers from `core.Result`:
 
 - `RateLimit-Limit`
 - `RateLimit-Remaining`
-- `RateLimit-Reset`
-- `Retry-After` when the request is denied
+- `RateLimit-Reset` when a positive reset duration is available
+- `Retry-After` when the request is denied and a positive retry delay is available
 
-Because these values come directly from algorithm results, header quality
-depends on the current metadata behavior of each limiter implementation.
+This keeps response headers aligned with reliable limiter metadata instead of
+forcing zero-value duration headers into every response.
 
 ## Custom Error Handling
 

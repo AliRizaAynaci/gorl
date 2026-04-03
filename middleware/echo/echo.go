@@ -89,7 +89,9 @@ func setHeaders(c echo.Context, res core.Result) {
 	h := c.Response().Header()
 	h.Set("RateLimit-Limit", fmt.Sprintf("%d", res.Limit))
 	h.Set("RateLimit-Remaining", fmt.Sprintf("%d", res.Remaining))
-	h.Set("RateLimit-Reset", fmt.Sprintf("%d", int(math.Ceil(res.Reset.Seconds()))))
+	if res.Reset > 0 {
+		h.Set("RateLimit-Reset", fmt.Sprintf("%d", int(math.Ceil(res.Reset.Seconds()))))
+	}
 	if !res.Allowed && res.RetryAfter > 0 {
 		h.Set("Retry-After", fmt.Sprintf("%d", int(math.Ceil(res.RetryAfter.Seconds()))))
 	}

@@ -3,6 +3,7 @@ package algorithms
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/AliRizaAynaci/gorl/v2/core"
@@ -35,13 +36,16 @@ func NewFixedWindowLimiter(cfg core.Config, store storage.Storage) core.Limiter 
 // Allow checks if a request with the given key is allowed under the fixed window policy.
 func (f *FixedWindowLimiter) Allow(ctx context.Context, key string) (core.Result, error) {
 	start := time.Now()
-	storageKey := f.prefix + ":" + key
+	bucket := start.UnixNano() / int64(f.window)
+	storageKey := fmt.Sprintf("%s:%s:%d", f.prefix, key, bucket)
 
 	count, err := f.store.Incr(ctx, storageKey, f.window)
 	if res, retErr, done := failOpenHandler(start, err, f.failOpen, f.metrics, f.limit); done {
 		return res, retErr
 	}
 
+	nextBucketStart := time.Unix(0, (bucket+1)*int64(f.window))
+	reset := clampDuration(time.Until(nextBucketStart))
 	remaining := f.limit - int(count)
 	if remaining < 0 {
 		remaining = 0
@@ -54,13 +58,14 @@ func (f *FixedWindowLimiter) Allow(ctx context.Context, key string) (core.Result
 		Allowed:   allowed,
 		Limit:     f.limit,
 		Remaining: remaining,
+		Reset:     reset,
 	}
 
 	if allowed {
 		f.metrics.IncAllow()
 	} else {
 		f.metrics.IncDeny()
-		res.RetryAfter = f.window // Simple fallback for fixed window
+		res.RetryAfter = reset
 	}
 	return res, nil
 }

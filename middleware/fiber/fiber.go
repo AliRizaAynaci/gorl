@@ -86,7 +86,9 @@ func RateLimit(limiter core.Limiter, cfg ...Config) fiber.Handler {
 func setHeaders(c *fiber.Ctx, res core.Result) {
 	c.Set("RateLimit-Limit", fmt.Sprintf("%d", res.Limit))
 	c.Set("RateLimit-Remaining", fmt.Sprintf("%d", res.Remaining))
-	c.Set("RateLimit-Reset", fmt.Sprintf("%d", int(math.Ceil(res.Reset.Seconds()))))
+	if res.Reset > 0 {
+		c.Set("RateLimit-Reset", fmt.Sprintf("%d", int(math.Ceil(res.Reset.Seconds()))))
+	}
 	if !res.Allowed && res.RetryAfter > 0 {
 		c.Set("Retry-After", fmt.Sprintf("%d", int(math.Ceil(res.RetryAfter.Seconds()))))
 	}

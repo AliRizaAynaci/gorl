@@ -83,6 +83,14 @@ func (l *LeakyBucketLimiter) Allow(ctx context.Context, key string) (core.Result
 		waterLevel++
 	}
 
+	nanoPerToken := float64(l.window.Nanoseconds()) / float64(l.limit)
+	elapsedSinceLeak := float64(now - lastLeak)
+	nextLeak := clampDuration(time.Duration(nanoPerToken-elapsedSinceLeak) * time.Nanosecond)
+	reset := time.Duration(0)
+	if waterLevel > 0 {
+		reset = clampDuration(time.Duration(float64(waterLevel)*nanoPerToken-elapsedSinceLeak) * time.Nanosecond)
+	}
+
 	// Persist updated state
 	err = l.store.Set(ctx, waterKey, float64(waterLevel), l.window)
 	if res, retErr, done := failOpenHandler(start, err, l.failOpen, l.metrics, l.limit); done {
@@ -99,18 +107,14 @@ func (l *LeakyBucketLimiter) Allow(ctx context.Context, key string) (core.Result
 		Allowed:   allowed,
 		Limit:     l.limit,
 		Remaining: l.limit - waterLevel,
+		Reset:     reset,
 	}
 
 	if allowed {
 		l.metrics.IncAllow()
 	} else {
 		l.metrics.IncDeny()
-		// Wait time until water level drops by 1
-		nanoPerToken := float64(l.window.Nanoseconds()) / float64(l.limit)
-		res.RetryAfter = time.Duration((1.0/nanoPerToken)-float64(now-lastLeak)) * time.Nanosecond // This math might be slightly off but gives an idea
-		if res.RetryAfter < 0 {
-			res.RetryAfter = 0
-		}
+		res.RetryAfter = nextLeak
 	}
 
 	return res, nil

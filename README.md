@@ -123,8 +123,9 @@ rl := mw.NewMiddleware(limiter, mw.Options{
 mux.Handle("/api/", rl(myHandler))
 ```
 
-The middleware automatically sets standard rate-limit headers on every response:
-`RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset`, and `Retry-After`.
+The middleware always sets `RateLimit-Limit` and `RateLimit-Remaining`, and
+adds `RateLimit-Reset` and `Retry-After` when the limiter returns a reliable
+duration.
 
 **Available Key Extractors:**
 - `mw.KeyByIP()` — client IP (supports `X-Forwarded-For`, `X-Real-Ip`)
@@ -188,7 +189,8 @@ e.Use(echomw.RateLimit(limiter)) // key defaults to c.RealIP()
 e.Start(":8080")
 ```
 
-> All framework middlewares automatically set `RateLimit-*` and `Retry-After` headers.
+> All framework middlewares set `RateLimit-Limit` and `RateLimit-Remaining`,
+> and add duration-based headers when reliable timing data is available.
 > Pass a custom `Config{KeyFunc: ...}` to override the default key extraction.
 
 ### Docker & Redis Backend
