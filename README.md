@@ -13,6 +13,7 @@ GoRL is a high-performance, extensible rate limiter library for Go. It supports 
 * [Features](#features)
 * [Installation](#installation)
 * [Quick Start](#quick-start)
+* [Docs](#docs)
 * [Usage Examples](#usage-examples)
 * [Observability](#observability)
 * [Benchmarks](#benchmarks)
@@ -67,6 +68,17 @@ func main() {
   }
 }
 ```
+
+## Docs
+
+Additional library documentation is available under [docs/README.md](docs/README.md).
+
+Recommended entry points:
+
+- [Getting Started](docs/guides/getting-started.md)
+- [System Overview](docs/architecture/system-overview.md)
+- [Middleware Guide](docs/guides/middleware.md)
+- [Public API Reference](docs/reference/public-api.md)
 
 ## Usage Examples
 
@@ -188,7 +200,6 @@ docker run --name redis-limiter -p 6379:6379 -d redis
 ```go
 limiter, err := gorl.New(core.Config{
   Strategy: core.TokenBucket,
-  KeyBy:    core.KeyByIP,
   Limit:    100,
   Window:   1 * time.Minute,
   RedisURL: "redis://localhost:6379/0",
@@ -417,6 +428,20 @@ To add any other storage backend (JetStream, DynamoDB, etc.) without forking the
    ```
 
 > **Note:** After implementing and wiring up your custom storage backend, open a Pull Request against the `main` branch to merge these changes into the GoRL repository before using it in production.
+
+## Key Selection
+
+GoRL accepts a rate-limit key as the second argument to `Allow(ctx, key)`.
+
+- In direct library usage, your application builds and passes that key.
+- In middleware usage, the middleware's `KeyFunc` determines the key.
+
+Example:
+
+```go
+key := tenantID + ":" + userID
+res, err := limiter.Allow(ctx, key)
+```
 
 
 ## Contributing

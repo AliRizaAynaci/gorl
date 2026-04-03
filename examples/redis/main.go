@@ -14,7 +14,6 @@ import (
 func main() {
 	limiter, err := gorl.New(core.Config{
 		Strategy: core.TokenBucket,
-		KeyBy:    core.KeyByAPIKey,
 		Limit:    4,
 		Window:   10 * time.Second,
 		RedisURL: "redis://localhost:6379/0",
