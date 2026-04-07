@@ -21,6 +21,10 @@ type Config struct {
 	// Defaults to c.IP() if nil.
 	KeyFunc func(c *fiber.Ctx) string
 
+	// ResourceFunc extracts the resource identifier from the Fiber context.
+	// Used by RateLimitByResource. Defaults to the request path.
+	ResourceFunc func(c *fiber.Ctx) string
+
 	// DeniedHandler is called when a request is rate-limited.
 	// Defaults to a JSON 429 response if nil.
 	DeniedHandler fiber.Handler
@@ -39,6 +43,11 @@ func configDefault(cfg ...Config) Config {
 	if c.KeyFunc == nil {
 		c.KeyFunc = func(ctx *fiber.Ctx) string {
 			return ctx.IP()
+		}
+	}
+	if c.ResourceFunc == nil {
+		c.ResourceFunc = func(ctx *fiber.Ctx) string {
+			return ctx.Path()
 		}
 	}
 	return c
@@ -65,6 +74,40 @@ func RateLimit(limiter core.Limiter, cfg ...Config) fiber.Handler {
 		}
 
 		// Set standard rate-limit headers
+		setHeaders(ctx, res)
+
+		if !res.Allowed {
+			if c.DeniedHandler != nil {
+				return c.DeniedHandler(ctx)
+			}
+			return ctx.Status(fiber.StatusTooManyRequests).
+				JSON(fiber.Map{
+					"error":       "rate limit exceeded",
+					"retry_after": fmt.Sprintf("%.0fs", res.RetryAfter.Seconds()),
+				})
+		}
+
+		return ctx.Next()
+	}
+}
+
+// RateLimitByResource returns a Fiber middleware that applies resource-scoped rate limiting.
+func RateLimitByResource(limiter core.ResourceLimiter, cfg ...Config) fiber.Handler {
+	c := configDefault(cfg...)
+
+	return func(ctx *fiber.Ctx) error {
+		key := c.KeyFunc(ctx)
+		resource := c.ResourceFunc(ctx)
+
+		res, err := limiter.AllowResource(ctx.UserContext(), resource, key)
+		if err != nil {
+			if c.ErrorHandler != nil {
+				return c.ErrorHandler(ctx, err)
+			}
+			return ctx.Status(fiber.StatusInternalServerError).
+				JSON(fiber.Map{"error": "internal server error"})
+		}
+
 		setHeaders(ctx, res)
 
 		if !res.Allowed {

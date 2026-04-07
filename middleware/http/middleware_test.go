@@ -24,6 +24,21 @@ func (m *mockLimiter) Allow(_ context.Context, _ string) (core.Result, error) {
 
 func (m *mockLimiter) Close() error { return nil }
 
+type mockResourceLimiter struct {
+	result   core.Result
+	err      error
+	resource string
+	key      string
+}
+
+func (m *mockResourceLimiter) AllowResource(_ context.Context, resource, key string) (core.Result, error) {
+	m.resource = resource
+	m.key = key
+	return m.result, m.err
+}
+
+func (m *mockResourceLimiter) Close() error { return nil }
+
 // --- Tests ---
 
 func TestRateLimit_Allowed(t *testing.T) {
@@ -227,6 +242,57 @@ func TestRateLimit_HeadersDisabled(t *testing.T) {
 
 	if rec.Header().Get("RateLimit-Limit") != "" {
 		t.Error("headers should not be set when disabled")
+	}
+}
+
+func TestRateLimitByResource_Allowed(t *testing.T) {
+	limiter := &mockResourceLimiter{result: core.Result{
+		Allowed: true, Limit: 10, Remaining: 9,
+		Reset: 30 * time.Second,
+	}}
+
+	handler := RateLimitByResource(limiter, Options{KeyFunc: KeyByIP()},
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("ok"))
+		}),
+	)
+
+	req := httptest.NewRequest("GET", "/api/users", nil)
+	req.RemoteAddr = "192.168.1.1:12345"
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if limiter.resource != "/api/users" {
+		t.Fatalf("expected resource /api/users, got %q", limiter.resource)
+	}
+	if limiter.key != "192.168.1.1" {
+		t.Fatalf("expected key 192.168.1.1, got %q", limiter.key)
+	}
+}
+
+func TestRateLimitByResource_DefaultResourceFuncUsesPath(t *testing.T) {
+	limiter := &mockResourceLimiter{result: core.Result{Allowed: true, Limit: 5, Remaining: 4}}
+
+	handler := RateLimitByResource(limiter, Options{
+		KeyFunc: KeyByHeader("X-API-Key"),
+	}, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	req := httptest.NewRequest("GET", "/login", nil)
+	req.Header.Set("X-API-Key", "key-123")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if limiter.resource != "/login" {
+		t.Fatalf("expected resource /login, got %q", limiter.resource)
+	}
+	if limiter.key != "key-123" {
+		t.Fatalf("expected key key-123, got %q", limiter.key)
 	}
 }
 
