@@ -13,6 +13,16 @@ Creates a limiter by:
 - choosing storage based on `RedisURL`,
 - selecting the requested strategy from the internal registry.
 
+### `gorl.NewResourceLimiter(cfg core.ResourceConfig) (core.ResourceLimiter, error)`
+
+Creates a resource-scoped limiter by:
+
+- validating the default and named resource policies,
+- defaulting metrics to `NoopMetrics`,
+- choosing storage based on `RedisURL`,
+- creating per-resource child limiters that share one storage backend,
+- falling back to `DefaultPolicy` for resources not present in `Resources`.
+
 ## `core.Config`
 
 ```go
@@ -42,11 +52,49 @@ Setting `RedisURL` selects the Redis backend and enables the built-in Redis
 atomic execution path for the built-in strategies. See
 [Distributed Semantics](../architecture/distributed-semantics.md).
 
+## `core.ResourcePolicy`
+
+```go
+type ResourcePolicy struct {
+    Limit  int
+    Window time.Duration
+}
+```
+
+## `core.ResourceConfig`
+
+```go
+type ResourceConfig struct {
+    Strategy      StrategyType
+    DefaultPolicy ResourcePolicy
+    Resources     map[string]ResourcePolicy
+    RedisURL      string
+    FailOpen      bool
+    Metrics       MetricsCollector
+}
+```
+
+### Semantics
+
+- Existing `core.Config` users do not need to change anything.
+- `DefaultPolicy` is required and is used as the fallback for unknown resources.
+- `Resources` contains optional per-resource overrides.
+- All resources under the same `ResourceConfig` use the same strategy and store selection.
+
 ## `core.Limiter`
 
 ```go
 type Limiter interface {
     Allow(ctx context.Context, key string) (Result, error)
+    Close() error
+}
+```
+
+## `core.ResourceLimiter`
+
+```go
+type ResourceLimiter interface {
+    AllowResource(ctx context.Context, resource, key string) (Result, error)
     Close() error
 }
 ```
@@ -107,3 +155,22 @@ GoRL does not derive request identity inside `gorl.New`.
 - If you call the limiter directly, you provide the key in `Allow(ctx, key)`.
 - If you use middleware, the middleware package decides the key via its
   configurable `KeyFunc`.
+
+## Resource Selection
+
+GoRL also supports optional resource-scoped limiting via `core.ResourceLimiter`.
+
+- `resource` selects which policy should be applied.
+- `key` selects which identity should be counted under that policy.
+- Middleware adapters expose a separate resource function when using the resource-scoped flow.
+
+## Config Loader
+
+The optional `config` package provides:
+
+```go
+config.LoadResourceConfig(path string) (core.ResourceConfig, error)
+```
+
+It supports `.json`, `.yaml`, and `.yml` files and converts duration strings
+such as `1s`, `30s`, and `1m` into `time.Duration`.

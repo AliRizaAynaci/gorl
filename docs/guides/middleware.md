@@ -10,6 +10,13 @@ All middleware adapters do three things:
 2. call `Allow(ctx, key)`,
 3. write rate-limit headers and either forward or deny the request.
 
+Resource-scoped middleware adds one more selection step:
+
+1. extract a resource from the request,
+2. extract a key from the request,
+3. call `AllowResource(ctx, resource, key)`,
+4. write rate-limit headers and either forward or deny the request.
+
 ## `net/http`
 
 ```go
@@ -47,6 +54,29 @@ func main() {
 - `mw.KeyByHeader("X-API-Key")`
 - `mw.KeyByPath()`
 
+### Resource-Scoped `net/http`
+
+```go
+resourceLimiter, _ := gorl.NewResourceLimiter(core.ResourceConfig{
+    Strategy: core.SlidingWindow,
+    DefaultPolicy: core.ResourcePolicy{
+        Limit:  100,
+        Window: time.Minute,
+    },
+    Resources: map[string]core.ResourcePolicy{
+        "/login":  {Limit: 5, Window: time.Minute},
+        "/search": {Limit: 50, Window: time.Second},
+    },
+})
+
+handler := mw.RateLimitByResource(resourceLimiter, mw.Options{
+    KeyFunc:      mw.KeyByIP(),
+    ResourceFunc: mw.ResourceByPath(),
+}, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+    w.Write([]byte("ok"))
+}))
+```
+
 ### Important Note
 
 `middleware/http` expects `Options.KeyFunc` to be provided by the caller.
@@ -59,6 +89,8 @@ r.Use(ginmw.RateLimit(limiter))
 ```
 
 If `KeyFunc` is omitted, Gin defaults to `c.ClientIP()`.
+For resource-scoped limiting, `RateLimitByResource` defaults to `c.FullPath()`
+when available and falls back to `c.Request.URL.Path`.
 
 ## Fiber
 
@@ -68,6 +100,7 @@ app.Use(fibermw.RateLimit(limiter))
 ```
 
 If `KeyFunc` is omitted, Fiber defaults to `c.IP()`.
+For resource-scoped limiting, `RateLimitByResource` defaults to `c.Path()`.
 
 ## Echo
 
@@ -77,6 +110,8 @@ e.Use(echomw.RateLimit(limiter))
 ```
 
 If `KeyFunc` is omitted, Echo defaults to `c.RealIP()`.
+For resource-scoped limiting, `RateLimitByResource` defaults to `c.Path()`
+when available and falls back to `c.Request().URL.Path`.
 
 ## Headers
 
