@@ -22,26 +22,14 @@ var strategyRegistry = map[core.StrategyType]func(core.Config, storage.Storage) 
 // If cfg.RedisURL is provided, Redis is used as the storage backend. Otherwise, an in-memory backend is used.
 // Supported strategies: FixedWindow, TokenBucket, SlidingWindow, LeakyBucket.
 func New(cfg core.Config) (core.Limiter, error) {
-	// Validate configuration
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
+	cfg.Metrics = normalizeMetrics(cfg.Metrics)
 
-	// If Metrics is nil, default to NoopMetrics.
-	if cfg.Metrics == nil {
-		cfg.Metrics = &core.NoopMetrics{}
-	}
-
-	var store storage.Storage
-
-	if cfg.RedisURL != "" {
-		var err error
-		store, err = redis.NewRedisStore(cfg.RedisURL)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		store = inmem.NewInMemoryStore()
+	store, err := newStore(cfg.RedisURL)
+	if err != nil {
+		return nil, err
 	}
 
 	constructor, ok := strategyRegistry[cfg.Strategy]
@@ -49,4 +37,40 @@ func New(cfg core.Config) (core.Limiter, error) {
 		return nil, core.ErrUnknownStrategy
 	}
 	return constructor(cfg, store), nil
+}
+
+// NewResourceLimiter creates a resource-scoped limiter that shares a single storage backend
+// while allowing per-resource policies under the same strategy.
+func NewResourceLimiter(cfg core.ResourceConfig) (core.ResourceLimiter, error) {
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+	cfg.Metrics = normalizeMetrics(cfg.Metrics)
+
+	store, err := newStore(cfg.RedisURL)
+	if err != nil {
+		return nil, err
+	}
+
+	constructor, ok := strategyRegistry[cfg.Strategy]
+	if !ok {
+		_ = store.Close()
+		return nil, core.ErrUnknownStrategy
+	}
+
+	return newResourceRouter(cfg, store, constructor), nil
+}
+
+func normalizeMetrics(metrics core.MetricsCollector) core.MetricsCollector {
+	if metrics == nil {
+		return &core.NoopMetrics{}
+	}
+	return metrics
+}
+
+func newStore(redisURL string) (storage.Storage, error) {
+	if redisURL != "" {
+		return redis.NewRedisStore(redisURL)
+	}
+	return inmem.NewInMemoryStore(), nil
 }
