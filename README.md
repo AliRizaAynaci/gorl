@@ -13,6 +13,7 @@ GoRL is a high-performance, extensible rate limiter library for Go. It supports 
 * [Features](#features)
 * [Installation](#installation)
 * [Quick Start](#quick-start)
+* [Resource-Scoped Limits](#resource-scoped-limits)
 * [Docs](#docs)
 * [Usage Examples](#usage-examples)
 * [Observability](#observability)
@@ -29,6 +30,7 @@ GoRL is a high-performance, extensible rate limiter library for Go. It supports 
 * **Atomic Redis Execution**: Built-in Redis-backed limiters use Lua-scripted state transitions
 * **Fail-Open / Fail-Close**: Configurable policy on backend errors
 * **Key Extraction**: Built-in strategies (IP, API key) or custom
+* **Resource-Scoped Policies**: Optional per-resource overrides while keeping a shared store and strategy
 * **Metrics Collector**: Optional abstraction for counters and histograms, zero-cost when unused
 * **Minimal Dependencies**: Zero external requirements for in-memory mode
 * **Middleware Support**: Built-in middleware for `net/http`, Fiber, Gin, and Echo
@@ -68,6 +70,84 @@ func main() {
     fmt.Printf("Request #%d: allowed=%v, remaining=%d\n", i, res.Allowed, res.Remaining)
   }
 }
+```
+
+## Resource-Scoped Limits
+
+Existing `v2` usage stays exactly the same. If you want per-resource policies,
+you can opt into the additive resource-scoped API:
+
+```go
+resourceLimiter, err := gorl.NewResourceLimiter(core.ResourceConfig{
+  Strategy: core.SlidingWindow,
+  DefaultPolicy: core.ResourcePolicy{
+    Limit:  100,
+    Window: time.Minute,
+  },
+  Resources: map[string]core.ResourcePolicy{
+    "login": {
+      Limit:  5,
+      Window: time.Minute,
+    },
+    "search": {
+      Limit:  50,
+      Window: time.Second,
+    },
+  },
+})
+if err != nil {
+  panic(err)
+}
+defer resourceLimiter.Close()
+
+res, err := resourceLimiter.AllowResource(context.Background(), "login", "user-123")
+if err != nil {
+  panic(err)
+}
+
+fmt.Println(res.Allowed, res.Remaining)
+```
+
+Unknown resources use the configured `DefaultPolicy`, so named overrides are
+optional rather than required.
+
+### Load Resource Config from JSON or YAML
+
+Example `limits.yaml`:
+
+```yaml
+gorl:
+  strategy: sliding_window
+  redis_url: redis://localhost:6379/0
+  fail_open: false
+  default:
+    limit: 100
+    window: 1m
+  resources:
+    login:
+      limit: 5
+      window: 1m
+    search:
+      limit: 50
+      window: 1s
+```
+
+```go
+import (
+  "github.com/AliRizaAynaci/gorl/v2"
+  "github.com/AliRizaAynaci/gorl/v2/config"
+)
+
+cfg, err := config.LoadResourceConfig("limits.yaml")
+if err != nil {
+  panic(err)
+}
+
+resourceLimiter, err := gorl.NewResourceLimiter(cfg)
+if err != nil {
+  panic(err)
+}
+defer resourceLimiter.Close()
 ```
 
 ## Docs
@@ -134,6 +214,29 @@ duration.
 - `mw.KeyByHeader("X-API-Key")` — any request header
 - `mw.KeyByPath()` — IP + request path (per-endpoint limiting)
 
+### HTTP Middleware (Resource-Scoped)
+
+```go
+resourceLimiter, _ := gorl.NewResourceLimiter(core.ResourceConfig{
+  Strategy: core.SlidingWindow,
+  DefaultPolicy: core.ResourcePolicy{
+    Limit:  100,
+    Window: time.Minute,
+  },
+  Resources: map[string]core.ResourcePolicy{
+    "/login": {Limit: 5, Window: time.Minute},
+    "/search": {Limit: 50, Window: time.Second},
+  },
+})
+
+mux.Handle("/", mw.RateLimitByResource(resourceLimiter, mw.Options{
+  KeyFunc:      mw.KeyByIP(),
+  ResourceFunc: mw.ResourceByPath(),
+}, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+  w.Write([]byte("OK"))
+})))
+```
+
 ### Fiber
 
 ```go
@@ -193,7 +296,8 @@ e.Start(":8080")
 
 > All framework middlewares set `RateLimit-Limit` and `RateLimit-Remaining`,
 > and add duration-based headers when reliable timing data is available.
-> Pass a custom `Config{KeyFunc: ...}` to override the default key extraction.
+> Pass a custom `Config{KeyFunc: ..., ResourceFunc: ...}` to override the default
+> key or resource extraction behavior.
 
 ### Docker & Redis Backend
 
@@ -489,6 +593,19 @@ Example:
 ```go
 key := tenantID + ":" + userID
 res, err := limiter.Allow(ctx, key)
+```
+
+## Resource Selection
+
+Resource-scoped limiters add a second routing dimension on top of keys:
+
+- `resource` selects which policy should be applied
+- `key` selects which identity is counted within that policy
+
+Example:
+
+```go
+res, err := resourceLimiter.AllowResource(ctx, "github_api", "tenant:acme")
 ```
 
 

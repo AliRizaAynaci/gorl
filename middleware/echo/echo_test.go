@@ -22,6 +22,20 @@ func (m *mockLimiter) Allow(_ context.Context, _ string) (core.Result, error) {
 }
 func (m *mockLimiter) Close() error { return nil }
 
+type mockResourceLimiter struct {
+	result   core.Result
+	err      error
+	resource string
+	key      string
+}
+
+func (m *mockResourceLimiter) AllowResource(_ context.Context, resource, key string) (core.Result, error) {
+	m.resource = resource
+	m.key = key
+	return m.result, m.err
+}
+func (m *mockResourceLimiter) Close() error { return nil }
+
 func TestRateLimit_Allowed(t *testing.T) {
 	e := echo.New()
 	limiter := &mockLimiter{result: core.Result{
@@ -131,5 +145,29 @@ func TestRateLimit_OmitsZeroDurationHeaders(t *testing.T) {
 	}
 	if rec.Header().Get("Retry-After") != "" {
 		t.Fatalf("expected Retry-After to be omitted, got %q", rec.Header().Get("Retry-After"))
+	}
+}
+
+func TestRateLimitByResource_UsesRoutePath(t *testing.T) {
+	e := echo.New()
+	limiter := &mockResourceLimiter{result: core.Result{Allowed: true, Limit: 10, Remaining: 9}}
+
+	e.GET("/users/:id", func(c echo.Context) error {
+		return c.NoContent(http.StatusOK)
+	}, RateLimitByResource(limiter))
+
+	req := httptest.NewRequest(http.MethodGet, "/users/42", nil)
+	req.RemoteAddr = "10.0.0.1:1234"
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if limiter.resource != "/users/:id" {
+		t.Fatalf("expected resource /users/:id, got %q", limiter.resource)
+	}
+	if limiter.key != "10.0.0.1" {
+		t.Fatalf("expected key 10.0.0.1, got %q", limiter.key)
 	}
 }

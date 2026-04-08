@@ -22,6 +22,10 @@ type Config struct {
 	// Defaults to c.ClientIP() if nil.
 	KeyFunc func(c *gin.Context) string
 
+	// ResourceFunc extracts the resource identifier from the Gin context.
+	// Used by RateLimitByResource. Defaults to the matched route pattern, then request path.
+	ResourceFunc func(c *gin.Context) string
+
 	// DeniedHandler is called when a request is rate-limited.
 	// Defaults to a JSON 429 response if nil.
 	DeniedHandler gin.HandlerFunc
@@ -40,6 +44,14 @@ func configDefault(cfg ...Config) Config {
 	if c.KeyFunc == nil {
 		c.KeyFunc = func(ctx *gin.Context) string {
 			return ctx.ClientIP()
+		}
+	}
+	if c.ResourceFunc == nil {
+		c.ResourceFunc = func(ctx *gin.Context) string {
+			if fullPath := ctx.FullPath(); fullPath != "" {
+				return fullPath
+			}
+			return ctx.Request.URL.Path
 		}
 	}
 	return c
@@ -69,6 +81,45 @@ func RateLimit(limiter core.Limiter, cfg ...Config) gin.HandlerFunc {
 		}
 
 		// Set standard rate-limit headers
+		setHeaders(ctx, res)
+
+		if !res.Allowed {
+			if c.DeniedHandler != nil {
+				c.DeniedHandler(ctx)
+				ctx.Abort()
+				return
+			}
+			ctx.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
+				"error":       "rate limit exceeded",
+				"retry_after": fmt.Sprintf("%.0fs", res.RetryAfter.Seconds()),
+			})
+			return
+		}
+
+		ctx.Next()
+	}
+}
+
+// RateLimitByResource returns a Gin middleware that applies resource-scoped rate limiting.
+func RateLimitByResource(limiter core.ResourceLimiter, cfg ...Config) gin.HandlerFunc {
+	c := configDefault(cfg...)
+
+	return func(ctx *gin.Context) {
+		key := c.KeyFunc(ctx)
+		resource := c.ResourceFunc(ctx)
+
+		res, err := limiter.AllowResource(ctx.Request.Context(), resource, key)
+		if err != nil {
+			if c.ErrorHandler != nil {
+				c.ErrorHandler(ctx, err)
+				ctx.Abort()
+				return
+			}
+			ctx.AbortWithStatusJSON(http.StatusInternalServerError,
+				gin.H{"error": "internal server error"})
+			return
+		}
+
 		setHeaders(ctx, res)
 
 		if !res.Allowed {

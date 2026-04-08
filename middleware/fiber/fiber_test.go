@@ -23,6 +23,20 @@ func (m *mockLimiter) Allow(_ context.Context, _ string) (core.Result, error) {
 }
 func (m *mockLimiter) Close() error { return nil }
 
+type mockResourceLimiter struct {
+	result   core.Result
+	err      error
+	resource string
+	key      string
+}
+
+func (m *mockResourceLimiter) AllowResource(_ context.Context, resource, key string) (core.Result, error) {
+	m.resource = resource
+	m.key = key
+	return m.result, m.err
+}
+func (m *mockResourceLimiter) Close() error { return nil }
+
 func TestRateLimit_Allowed(t *testing.T) {
 	app := fiber.New()
 	limiter := &mockLimiter{result: core.Result{
@@ -123,5 +137,31 @@ func TestRateLimit_OmitsZeroDurationHeaders(t *testing.T) {
 	}
 	if resp.Header.Get("Retry-After") != "" {
 		t.Fatalf("expected Retry-After to be omitted, got %q", resp.Header.Get("Retry-After"))
+	}
+}
+
+func TestRateLimitByResource_UsesRequestPath(t *testing.T) {
+	app := fiber.New()
+	limiter := &mockResourceLimiter{result: core.Result{Allowed: true, Limit: 10, Remaining: 9}}
+
+	app.Use(RateLimitByResource(limiter))
+	app.Get("/users/:id", func(c *fiber.Ctx) error {
+		return c.SendStatus(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/users/42", nil)
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	if limiter.resource != "/users/42" {
+		t.Fatalf("expected resource /users/42, got %q", limiter.resource)
+	}
+	if limiter.key == "" {
+		t.Fatal("expected key to be populated")
 	}
 }

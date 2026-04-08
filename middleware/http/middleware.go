@@ -25,6 +25,9 @@ import (
 // KeyFunc extracts a rate-limiting key from an HTTP request.
 type KeyFunc func(r *http.Request) string
 
+// ResourceFunc extracts the resource identifier from an HTTP request.
+type ResourceFunc func(r *http.Request) string
+
 // DeniedHandler is called when a request is rate-limited.
 // If nil, a default 429 response is sent.
 type DeniedHandler func(w http.ResponseWriter, r *http.Request, result core.Result)
@@ -46,6 +49,10 @@ type Options struct {
 	// OnError is called when the limiter encounters an internal error.
 	// If nil, a default 500 response is returned.
 	OnError ErrorHandler
+
+	// ResourceFunc extracts the resource identifier from the request.
+	// Used by RateLimitByResource. Defaults to ResourceByPath if nil.
+	ResourceFunc ResourceFunc
 
 	// SetHeaders controls whether standard rate-limit headers are added to every response.
 	// Defaults to true.
@@ -106,6 +113,13 @@ func KeyByPath() KeyFunc {
 	}
 }
 
+// ResourceByPath returns a ResourceFunc that uses the request path as the resource identifier.
+func ResourceByPath() ResourceFunc {
+	return func(r *http.Request) string {
+		return r.URL.Path
+	}
+}
+
 // --- Middleware ---
 
 // RateLimit returns an http.Handler middleware that applies rate limiting.
@@ -150,9 +164,56 @@ func RateLimit(limiter core.Limiter, opts Options, next http.Handler) http.Handl
 	})
 }
 
+// RateLimitByResource returns an http.Handler middleware that applies resource-scoped rate limiting.
+//
+// For every incoming request, it extracts both a resource using opts.ResourceFunc
+// and a key using opts.KeyFunc, calls limiter.AllowResource, and either passes the
+// request to the next handler or returns a 429 Too Many Requests response.
+func RateLimitByResource(limiter core.ResourceLimiter, opts Options, next http.Handler) http.Handler {
+	resourceFunc := opts.resourceFunc()
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		key := opts.KeyFunc(r)
+		resource := resourceFunc(r)
+
+		res, err := limiter.AllowResource(r.Context(), resource, key)
+		if err != nil {
+			if opts.OnError != nil {
+				opts.OnError(w, r, err)
+				return
+			}
+			http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
+			return
+		}
+
+		if opts.shouldSetHeaders() {
+			setRateLimitHeaders(w, res)
+		}
+
+		if !res.Allowed {
+			if opts.OnDenied != nil {
+				opts.OnDenied(w, r, res)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusTooManyRequests)
+			fmt.Fprintf(w, `{"error":"rate limit exceeded","retry_after":"%.0fs"}`, res.RetryAfter.Seconds())
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
 // RateLimitFunc is a convenience wrapper that accepts an http.HandlerFunc instead of http.Handler.
 func RateLimitFunc(limiter core.Limiter, opts Options, next http.HandlerFunc) http.Handler {
 	return RateLimit(limiter, opts, next)
+}
+
+// RateLimitFuncByResource is a convenience wrapper that accepts an http.HandlerFunc
+// instead of http.Handler for resource-scoped limiting.
+func RateLimitFuncByResource(limiter core.ResourceLimiter, opts Options, next http.HandlerFunc) http.Handler {
+	return RateLimitByResource(limiter, opts, next)
 }
 
 // NewMiddleware returns a function that can be used to wrap handlers,
@@ -163,6 +224,14 @@ func RateLimitFunc(limiter core.Limiter, opts Options, next http.HandlerFunc) ht
 func NewMiddleware(limiter core.Limiter, opts Options) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return RateLimit(limiter, opts, next)
+	}
+}
+
+// NewResourceMiddleware returns a function that can be used to wrap handlers
+// with resource-scoped rate limiting.
+func NewResourceMiddleware(limiter core.ResourceLimiter, opts Options) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return RateLimitByResource(limiter, opts, next)
 	}
 }
 
@@ -192,4 +261,11 @@ func WithContext(key string, val interface{}, inner KeyFunc) KeyFunc {
 		r2 := r.WithContext(ctx)
 		return inner(r2)
 	}
+}
+
+func (o Options) resourceFunc() ResourceFunc {
+	if o.ResourceFunc == nil {
+		return ResourceByPath()
+	}
+	return o.ResourceFunc
 }

@@ -82,6 +82,37 @@ Where:
 - `key` is the rate-limit identity chosen by your application,
 - `res` describes whether the request is allowed and how much capacity remains.
 
+## Resource-Scoped Runtime Model
+
+If you need different policies for different resources while keeping the same
+strategy and store selection, use the additive resource-scoped API:
+
+```go
+resourceLimiter, err := gorl.NewResourceLimiter(core.ResourceConfig{
+    Strategy: core.SlidingWindow,
+    DefaultPolicy: core.ResourcePolicy{
+        Limit:  100,
+        Window: time.Minute,
+    },
+    Resources: map[string]core.ResourcePolicy{
+        "login":  {Limit: 5, Window: time.Minute},
+        "search": {Limit: 50, Window: time.Second},
+    },
+})
+if err != nil {
+    panic(err)
+}
+defer resourceLimiter.Close()
+
+res, err := resourceLimiter.AllowResource(ctx, "login", "user-123")
+```
+
+Where:
+
+- `resource` selects the policy,
+- `key` selects the identity counted within that policy,
+- unknown resources fall back to `DefaultPolicy`.
+
 ## Fail-Open Behavior
 
 Set `FailOpen: true` if you prefer requests to pass when the backend is
@@ -103,6 +134,38 @@ GoRL keeps request key selection outside the top-level constructor.
 
 - In direct usage, your code builds the key passed to `Allow(ctx, key)`.
 - In middleware usage, the adapter's key extraction function builds the key.
+- Resource-scoped usage is optional and does not change existing `v2` callers.
+
+## Load Config from JSON or YAML
+
+The optional `config` package can load `core.ResourceConfig` from disk:
+
+```yaml
+gorl:
+  strategy: sliding_window
+  default:
+    limit: 100
+    window: 1m
+  resources:
+    login:
+      limit: 5
+      window: 1m
+    search:
+      limit: 50
+      window: 1s
+```
+
+```go
+cfg, err := config.LoadResourceConfig("limits.yaml")
+if err != nil {
+    panic(err)
+}
+
+resourceLimiter, err := gorl.NewResourceLimiter(cfg)
+if err != nil {
+    panic(err)
+}
+```
 
 ## Next Reading
 

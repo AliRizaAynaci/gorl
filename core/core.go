@@ -4,7 +4,6 @@ package core
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 )
 
@@ -45,13 +44,7 @@ type Config struct {
 
 // Validate checks the configuration for common errors.
 func (c Config) Validate() error {
-	if c.Limit <= 0 {
-		return fmt.Errorf("%w: limit must be greater than 0", ErrConfigInvalid)
-	}
-	if c.Window <= 0 {
-		return fmt.Errorf("%w: window must be greater than 0", ErrConfigInvalid)
-	}
-	return nil
+	return validateLimitWindow(c.Limit, c.Window)
 }
 
 // Result represents the outcome of a rate limiting check.

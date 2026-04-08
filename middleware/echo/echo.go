@@ -22,6 +22,10 @@ type Config struct {
 	// Defaults to c.RealIP() if nil.
 	KeyFunc func(c echo.Context) string
 
+	// ResourceFunc extracts the resource identifier from the Echo context.
+	// Used by RateLimitByResource. Defaults to the route path, then request path.
+	ResourceFunc func(c echo.Context) string
+
 	// DeniedHandler is called when a request is rate-limited.
 	// Defaults to a JSON 429 response if nil.
 	DeniedHandler echo.HandlerFunc
@@ -40,6 +44,14 @@ func configDefault(cfg ...Config) Config {
 	if c.KeyFunc == nil {
 		c.KeyFunc = func(ctx echo.Context) string {
 			return ctx.RealIP()
+		}
+	}
+	if c.ResourceFunc == nil {
+		c.ResourceFunc = func(ctx echo.Context) string {
+			if path := ctx.Path(); path != "" {
+				return path
+			}
+			return ctx.Request().URL.Path
 		}
 	}
 	return c
@@ -67,6 +79,41 @@ func RateLimit(limiter core.Limiter, cfg ...Config) echo.MiddlewareFunc {
 			}
 
 			// Set standard rate-limit headers
+			setHeaders(ctx, res)
+
+			if !res.Allowed {
+				if c.DeniedHandler != nil {
+					return c.DeniedHandler(ctx)
+				}
+				return ctx.JSON(http.StatusTooManyRequests, map[string]string{
+					"error":       "rate limit exceeded",
+					"retry_after": fmt.Sprintf("%.0fs", res.RetryAfter.Seconds()),
+				})
+			}
+
+			return next(ctx)
+		}
+	}
+}
+
+// RateLimitByResource returns an Echo middleware that applies resource-scoped rate limiting.
+func RateLimitByResource(limiter core.ResourceLimiter, cfg ...Config) echo.MiddlewareFunc {
+	c := configDefault(cfg...)
+
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(ctx echo.Context) error {
+			key := c.KeyFunc(ctx)
+			resource := c.ResourceFunc(ctx)
+
+			res, err := limiter.AllowResource(ctx.Request().Context(), resource, key)
+			if err != nil {
+				if c.ErrorHandler != nil {
+					return c.ErrorHandler(ctx, err)
+				}
+				return ctx.JSON(http.StatusInternalServerError,
+					map[string]string{"error": "internal server error"})
+			}
+
 			setHeaders(ctx, res)
 
 			if !res.Allowed {
