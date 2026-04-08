@@ -113,6 +113,25 @@ optional rather than required.
 
 ### Load Resource Config from JSON or YAML
 
+Example `limits.yaml`:
+
+```yaml
+gorl:
+  strategy: sliding_window
+  redis_url: redis://localhost:6379/0
+  fail_open: false
+  default:
+    limit: 100
+    window: 1m
+  resources:
+    login:
+      limit: 5
+      window: 1m
+    search:
+      limit: 50
+      window: 1s
+```
+
 ```go
 import (
   "github.com/AliRizaAynaci/gorl/v2"

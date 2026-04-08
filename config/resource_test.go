@@ -57,14 +57,15 @@ func TestLoadResourceConfig_JSON(t *testing.T) {
 
 func TestLoadResourceConfig_YAML(t *testing.T) {
 	path := writeTempConfig(t, "resource-config.yaml", `
-strategy: token_bucket
-default:
-  limit: 20
-  window: 30s
-resources:
-  outbound-api:
-    limit: 10
-    window: 1s
+gorl:
+  strategy: token_bucket
+  default:
+    limit: 20
+    window: 30s
+  resources:
+    outbound-api:
+      limit: 10
+      window: 1s
 `)
 
 	cfg, err := LoadResourceConfig(path)
@@ -80,6 +81,39 @@ resources:
 	}
 	if cfg.Resources["outbound-api"].Limit != 10 {
 		t.Fatalf("unexpected named resource policy: %+v", cfg.Resources["outbound-api"])
+	}
+}
+
+func TestLoadResourceConfig_JSONEnvelope(t *testing.T) {
+	path := writeTempConfig(t, "resource-config.json", `{
+  "gorl": {
+    "strategy": "fixed_window",
+    "default": {
+      "limit": 10,
+      "window": "1m"
+    },
+    "resources": {
+      "login": {
+        "limit": 2,
+        "window": "10s"
+      }
+    }
+  }
+}`)
+
+	cfg, err := LoadResourceConfig(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if cfg.Strategy != core.FixedWindow {
+		t.Fatalf("expected fixed_window, got %q", cfg.Strategy)
+	}
+	if cfg.DefaultPolicy.Limit != 10 {
+		t.Fatalf("unexpected default policy: %+v", cfg.DefaultPolicy)
+	}
+	if cfg.Resources["login"].Window != 10*time.Second {
+		t.Fatalf("unexpected login policy: %+v", cfg.Resources["login"])
 	}
 }
 

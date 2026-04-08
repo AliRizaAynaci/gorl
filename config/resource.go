@@ -20,6 +20,10 @@ type resourceConfigDocument struct {
 	Resources map[string]resourcePolicyDocument `json:"resources" yaml:"resources"`
 }
 
+type resourceConfigEnvelope struct {
+	GoRL *resourceConfigDocument `json:"gorl" yaml:"gorl"`
+}
+
 type resourcePolicyDocument struct {
 	Limit  int    `json:"limit" yaml:"limit"`
 	Window string `json:"window" yaml:"window"`
@@ -33,17 +37,28 @@ func LoadResourceConfig(path string) (core.ResourceConfig, error) {
 	}
 
 	var doc resourceConfigDocument
+	var envelope resourceConfigEnvelope
 	switch strings.ToLower(filepath.Ext(path)) {
 	case ".json":
 		if err := json.Unmarshal(data, &doc); err != nil {
 			return core.ResourceConfig{}, fmt.Errorf("parse json config: %w", err)
 		}
+		if err := json.Unmarshal(data, &envelope); err != nil {
+			return core.ResourceConfig{}, fmt.Errorf("parse json config envelope: %w", err)
+		}
 	case ".yaml", ".yml":
 		if err := yaml.Unmarshal(data, &doc); err != nil {
 			return core.ResourceConfig{}, fmt.Errorf("parse yaml config: %w", err)
 		}
+		if err := yaml.Unmarshal(data, &envelope); err != nil {
+			return core.ResourceConfig{}, fmt.Errorf("parse yaml config envelope: %w", err)
+		}
 	default:
 		return core.ResourceConfig{}, fmt.Errorf("unsupported config format %q", filepath.Ext(path))
+	}
+
+	if envelope.GoRL != nil {
+		doc = *envelope.GoRL
 	}
 
 	return doc.toCore()

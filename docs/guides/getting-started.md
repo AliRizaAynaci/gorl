@@ -140,6 +140,21 @@ GoRL keeps request key selection outside the top-level constructor.
 
 The optional `config` package can load `core.ResourceConfig` from disk:
 
+```yaml
+gorl:
+  strategy: sliding_window
+  default:
+    limit: 100
+    window: 1m
+  resources:
+    login:
+      limit: 5
+      window: 1m
+    search:
+      limit: 50
+      window: 1s
+```
+
 ```go
 cfg, err := config.LoadResourceConfig("limits.yaml")
 if err != nil {

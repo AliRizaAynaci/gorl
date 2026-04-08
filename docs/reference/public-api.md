@@ -174,3 +174,8 @@ config.LoadResourceConfig(path string) (core.ResourceConfig, error)
 
 It supports `.json`, `.yaml`, and `.yml` files and converts duration strings
 such as `1s`, `30s`, and `1m` into `time.Duration`.
+
+The loader accepts either:
+
+- a flat top-level object, or
+- a nested `gorl` root object for namespaced configs.
