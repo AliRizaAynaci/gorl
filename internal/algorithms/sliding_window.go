@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"sync"
 	"time"
 
 	"github.com/AliRizaAynaci/gorl/v2/core"
@@ -19,6 +20,7 @@ type SlidingWindowLimiter struct {
 	stateTTL time.Duration
 	store    storage.Storage
 	prefix   string
+	mu       sync.Mutex
 	metrics  core.MetricsCollector
 	failOpen bool
 }
@@ -43,6 +45,13 @@ func (s *SlidingWindowLimiter) Allow(ctx context.Context, key string) (core.Resu
 		return s.allowRedis(ctx, start, runner, key)
 	}
 
+	// The generic path reads the counters, decides, and only then increments,
+	// which is not atomic across the store's Get/Incr calls. Serialize it like
+	// TokenBucketLimiter and LeakyBucketLimiter do so concurrent requests for the
+	// same key cannot both pass the check and admit over the limit. The redis
+	// path stays lock-free because its Lua script is already atomic.
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return s.allowGeneric(ctx, start, key)
 }
 
