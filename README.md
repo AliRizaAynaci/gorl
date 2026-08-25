@@ -176,6 +176,7 @@ Recommended entry points:
 - [Choose an Algorithm](docs/concepts/algorithms.md)
 - [Keys and Resources](docs/concepts/keys-and-resources.md)
 - [System Overview](docs/architecture/system-overview.md)
+- [Concurrency and Lock Sharding](docs/architecture/concurrency.md)
 - [Distributed Semantics](docs/architecture/distributed-semantics.md)
 - [Middleware Guide](docs/guides/middleware.md)
 - [Redis in Production](docs/guides/redis-production.md)
@@ -389,44 +390,77 @@ func main() {
 
 ## Benchmarks
 
-Benchmarks below are averages of 3 runs on Apple M4 using:
+Every figure is the **median of 10 samples** summarized with `benchstat`, measured
+on Apple M4 with Go 1.26.0 against the current release. Redis figures used Redis
+7.4.10 in a local `redis:7-alpine` container. `±` is the sample spread.
 
 ```bash
-go test ./internal/algorithms -run=^$ -bench=. -benchmem -benchtime=1s -count=3
+GORL_REDIS_URL=redis://127.0.0.1:6379/0 \
+go test ./internal/algorithms \
+  -run=^$ \
+  -bench='^Benchmark(Redis_)?(FixedWindow|SlidingWindow|TokenBucket|LeakyBucket)_' \
+  -benchmem \
+  -benchtime=1s \
+  -count=10 | tee results.txt
+
+benchstat results.txt
 ```
 
-Redis results were measured against a local `redis:7-alpine` container and
-reflect the Lua-backed atomic execution path.
+### Scenarios
+
+| Scenario | What it measures |
+| --- | --- |
+| Single key | One key, one goroutine, request allowed. |
+| Multi key | 1024 distinct keys, one goroutine, request allowed. |
+| Denied | Limit already exhausted, so the rejection path runs. |
+| Parallel, single key | Every goroutine competes for the same key. |
+| Parallel, multi key | Goroutines spread across 1024 distinct keys. |
 
 ### In-Memory Backend
 
-| Algorithm      | Single Key (ns/op, B/op, allocs)     | Multi Key (ns/op, B/op, allocs)      |
-| -------------- | ------------------------------------ | ------------------------------------ |
-| Fixed Window   | 217.2 ns/op, 64 B/op, 4 allocs/op    | 268.8 ns/op, 86 B/op, 5 allocs/op    |
-| Sliding Window | 394.8 ns/op, 168 B/op, 9 allocs/op   | 504.2 ns/op, 182 B/op, 10 allocs/op  |
-| Token Bucket   | 467.6 ns/op, 272 B/op, 12 allocs/op  | 546.0 ns/op, 300 B/op, 13 allocs/op  |
-| Leaky Bucket   | 474.7 ns/op, 272 B/op, 12 allocs/op  | 570.0 ns/op, 286 B/op, 13 allocs/op  |
+Time per operation (ns/op):
+
+| Algorithm | Single key | Multi key | Denied | Parallel, single key | Parallel, multi key |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Fixed Window | 209.3 ± 1% | 221.8 ± 0% | 211.2 ± 4% | 204.2 ± 4% | **67.3 ± 4%** |
+| Sliding Window | 524.2 ± 13% | 497.9 ± 15% | 399.6 ± 2% | 604.8 ± 2% | **265.8 ± 4%** |
+| Token Bucket | 484.3 ± 3% | 548.0 ± 1% | 492.9 ± 1% | 703.5 ± 3% | **367.2 ± 6%** |
+| Leaky Bucket | 467.2 ± 2% | 520.8 ± 2% | 456.8 ± 1% | 616.8 ± 8% | **328.1 ± 7%** |
+
+Allocations are constant per algorithm across every scenario: Fixed Window
+4 allocs/op (64–72 B/op), Sliding Window 9 allocs/op (168–192 B/op), Token Bucket
+and Leaky Bucket 12 allocs/op (272–288 B/op).
+
+The two parallel columns are the interesting pair. `Parallel, single key` is
+slower than the sequential case because one key must stay serialized, while
+`Parallel, multi key` is the fastest column because unrelated keys hold different
+lock shards and run concurrently. See
+[Concurrency and lock sharding](docs/architecture/concurrency.md)
+for how that works and what it changed.
 
 ### Redis Backend
 
-| Algorithm      | Single Key (ns/op, B/op, allocs)        | Multi Key (ns/op, B/op, allocs)         |
-| -------------- | --------------------------------------- | --------------------------------------- |
-| Fixed Window   | 100797.0 ns/op, 416 B/op, 17 allocs/op | 103031.7 ns/op, 452 B/op, 17 allocs/op |
-| Sliding Window | 106871.3 ns/op, 912 B/op, 32 allocs/op | 118876.3 ns/op, 970.3 B/op, 33 allocs/op |
-| Token Bucket   | 107571.0 ns/op, 800 B/op, 28 allocs/op | 108520.0 ns/op, 861 B/op, 29 allocs/op |
-| Leaky Bucket   | 103766.0 ns/op, 800 B/op, 28 allocs/op | 111682.3 ns/op, 859 B/op, 29 allocs/op |
+Time per operation (µs/op):
 
-### Redis: Before Lua vs After Lua
+| Algorithm | Single key | Multi key | Denied | Parallel, single key | Parallel, multi key |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Fixed Window | 95.2 ± 2% | 95.6 ± 7% | 95.4 ± 6% | 37.5 ± 19% | 44.8 ± 12% |
+| Sliding Window | 123.9 ± 11% | 130.5 ± 23% | 124.1 ± 2% | 48.9 ± 7% | 48.3 ± 3% |
+| Token Bucket | 118.2 ± 4% | 119.9 ± 4% | 119.6 ± 2% | 49.2 ± 8% | 48.2 ± 5% |
+| Leaky Bucket | 118.0 ± 7% | 121.0 ± 4% | 118.8 ± 3% | 47.0 ± 3% | 48.4 ± 3% |
 
-| Algorithm      | Single Key                             | Multi Key                              |
-| -------------- | -------------------------------------- | -------------------------------------- |
-| Fixed Window   | `178022.0 -> 100797.0 ns/op` `43.4%` faster | `186592.7 -> 103031.7 ns/op` `44.8%` faster |
-| Sliding Window | `457973.7 -> 106871.3 ns/op` `76.7%` faster | `462304.7 -> 118876.3 ns/op` `74.3%` faster |
-| Token Bucket   | `374951.7 -> 107571.0 ns/op` `71.3%` faster | `399340.7 -> 108520.0 ns/op` `72.8%` faster |
-| Leaky Bucket   | `386675.0 -> 103766.0 ns/op` `73.2%` faster | `470074.0 -> 111682.3 ns/op` `76.2%` faster |
+Allocations per operation: Fixed Window 16–17 allocs (456–476 B), Sliding Window
+31–32 allocs (~1.03–1.08 KiB), Token Bucket 26–27 allocs (880–916 B), Leaky
+Bucket 27 allocs (888–924 B).
 
-These comparisons use the same benchmark command, the same local Redis
-container setup, and 3-run averages before and after the Lua migration.
+Redis numbers are dominated by network round-trip time, not by GoRL. That is why
+the parallel columns are roughly twice as fast: concurrent goroutines overlap
+their round trips. Compare Redis figures only against each other on the same host
+and network path, never against the in-memory table.
+
+These are comparative figures from one machine, not latency guarantees. See
+[Benchmarking methodology](docs/contributing/benchmarking.md) for the control
+group and A/B comparison rules behind any performance claim in this project.
 
 ## Storage Backends
 
