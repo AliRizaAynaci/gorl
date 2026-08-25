@@ -53,5 +53,8 @@ sequenceDiagram
   middleware packages provide a default key extractor when one is omitted.
 - `FailOpen` and `FailClose` behavior is enforced inside the algorithm layer.
 - The in-memory store handles TTL cleanup internally with a background GC loop.
+- Generic sliding-window, token-bucket, and leaky-bucket transitions use
+  [key-sharded synchronization](./concurrency.md) so unrelated keys can advance
+  independently while same-key updates remain serialized.
 - Redis-backed behavior depends on the storage backend plus the algorithm's
   state transition strategy.
