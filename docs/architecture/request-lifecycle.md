@@ -7,6 +7,8 @@ GoRL middleware adapter and into a limiter implementation.
 
 ```mermaid
 sequenceDiagram
+    accTitle: GoRL request lifecycle
+    accDescr: A client request passes through middleware, the limiter, algorithm, storage, and metrics before returning a decision.
     participant Client
     participant Middleware
     participant Limiter as core.Limiter

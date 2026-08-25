@@ -1,0 +1,13 @@
+gorl:
+  strategy: sliding_window
+  fail_open: false
+  default:
+    limit: 100
+    window: 1m
+  resources:
+    login:
+      limit: 5
+      window: 1m
+    search:
+      limit: 50
+      window: 1s

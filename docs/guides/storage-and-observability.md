@@ -92,6 +92,20 @@ limiter, err := gorl.New(core.Config{
 })
 ```
 
+The collector exports three metrics derived from the namespace and subsystem:
+
+- `<namespace>_<subsystem>_allow_total`,
+- `<namespace>_<subsystem>_deny_total`,
+- `<namespace>_<subsystem>_request_duration_seconds`.
+
+It intentionally has no key or resource labels, avoiding an unbounded metrics
+cardinality dimension. It also has no backend-error counter, so monitor Redis
+health separately.
+
+`RegisterPrometheusCollectors` registers against the default Prometheus registry
+and uses `MustRegister`; construct and register each metric name only once per
+process.
+
 ## Operational Advice
 
 - Use the in-memory store for local development and fast tests.
@@ -100,3 +114,5 @@ limiter, err := gorl.New(core.Config{
   script path rather than a custom backend's semantics.
 - Keep metrics optional at first; add them once you need production visibility.
 - Treat `FailOpen` as an application policy decision, not just a technical one.
+- Read [Redis in production](redis-production.md) for latency, cardinality, and
+  rollout guidance.

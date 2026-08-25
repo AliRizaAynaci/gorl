@@ -1,15 +1,24 @@
 # GoRL Documentation
 
-This directory contains library-focused documentation for GoRL.
+This directory contains the English Markdown source for the searchable
+[GoRL documentation site](https://alirizaaynaci.github.io/gorl/). The files also
+remain readable directly from a clone when working offline.
 
 ## Start Here
 
 - [Getting Started](./guides/getting-started.md)
+- [60-second Quickstart](./guides/quickstart.md)
+- [Choose an Algorithm](./concepts/algorithms.md)
+- [Keys and Resources](./concepts/keys-and-resources.md)
+- [Results and HTTP Headers](./concepts/results-and-headers.md)
 - [System Overview](./architecture/system-overview.md)
 - [Distributed Semantics](./architecture/distributed-semantics.md)
 - [Request Lifecycle](./architecture/request-lifecycle.md)
 - [Middleware Guide](./guides/middleware.md)
 - [Storage and Observability](./guides/storage-and-observability.md)
+- [Redis in Production](./guides/redis-production.md)
+- [Troubleshooting](./guides/troubleshooting.md)
+- [Runnable Examples](./examples/index.md)
 - [Public API Reference](./reference/public-api.md)
 - [Package Map](./architecture/package-map.md)
 
@@ -27,6 +36,24 @@ This directory contains library-focused documentation for GoRL.
    you need Redis or Prometheus integration.
 6. Use [Public API Reference](./reference/public-api.md) as the package-level
    lookup page while implementing.
+
+## Build Locally
+
+From the repository root:
+
+```bash
+python3 -m venv .venv-docs
+source .venv-docs/bin/activate
+python -m pip install --requirement requirements-docs.txt
+mkdocs serve
+```
+
+Validate exactly as CI does:
+
+```bash
+go test ./...
+mkdocs build --strict
+```
 
 ## Documentation Conventions
 

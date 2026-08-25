@@ -1,5 +1,16 @@
 <p align="center">
-  <img src="logo.png" alt="GoRL Logo" width="180"/>
+  <img src="docs/assets/logo.png" alt="GoRL Logo" width="180"/>
+</p>
+
+<p align="center">
+  <a href="https://alirizaaynaci.github.io/gorl/"><strong>Read the GoRL documentation →</strong></a>
+</p>
+
+<p align="center">
+  <a href="https://pkg.go.dev/github.com/AliRizaAynaci/gorl/v2"><img src="https://pkg.go.dev/badge/github.com/AliRizaAynaci/gorl/v2.svg" alt="Go Reference"/></a>
+  <a href="https://github.com/AliRizaAynaci/gorl/actions/workflows/ci.yml"><img src="https://github.com/AliRizaAynaci/gorl/actions/workflows/ci.yml/badge.svg?branch=main" alt="Go CI"/></a>
+  <a href="https://github.com/AliRizaAynaci/gorl/stargazers"><img src="https://img.shields.io/github/stars/AliRizaAynaci/gorl?style=flat-square&amp;logo=github" alt="GitHub stars"/></a>
+  <a href="https://github.com/AliRizaAynaci/gorl/blob/main/LICENSE"><img src="https://img.shields.io/github/license/AliRizaAynaci/gorl?style=flat-square" alt="License"/></a>
 </p>
 
 # GoRL - High-Performance Rate Limiter Library
@@ -152,14 +163,23 @@ defer resourceLimiter.Close()
 
 ## Docs
 
-Additional library documentation is available under [docs/README.md](docs/README.md).
+The searchable documentation site is the primary guide:
+
+- **[GoRL Documentation](https://alirizaaynaci.github.io/gorl/)**
+
+For offline reading or contributions, the same English Markdown sources remain
+available under [docs/README.md](docs/README.md).
 
 Recommended entry points:
 
 - [Getting Started](docs/guides/getting-started.md)
+- [Choose an Algorithm](docs/concepts/algorithms.md)
+- [Keys and Resources](docs/concepts/keys-and-resources.md)
 - [System Overview](docs/architecture/system-overview.md)
 - [Distributed Semantics](docs/architecture/distributed-semantics.md)
 - [Middleware Guide](docs/guides/middleware.md)
+- [Redis in Production](docs/guides/redis-production.md)
+- [Troubleshooting](docs/guides/troubleshooting.md)
 - [Public API Reference](docs/reference/public-api.md)
 
 ## Usage Examples

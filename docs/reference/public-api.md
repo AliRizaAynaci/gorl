@@ -1,6 +1,8 @@
 # Public API Reference
 
-This page summarizes the main public contracts exposed by the library.
+This page summarizes the main public contracts exposed by the library. Use
+[pkg.go.dev](https://pkg.go.dev/github.com/AliRizaAynaci/gorl/v2) for the exact
+package index and source-linked declarations.
 
 ## Constructor
 
@@ -13,6 +15,10 @@ Creates a limiter by:
 - choosing storage based on `RedisURL`,
 - selecting the requested strategy from the internal registry.
 
+Validation requires `Limit > 0` and `Window > 0`. An unsupported strategy
+returns `core.ErrUnknownStrategy`. If `RedisURL` is set, an invalid URL or failed
+startup ping is returned during construction.
+
 ### `gorl.NewResourceLimiter(cfg core.ResourceConfig) (core.ResourceLimiter, error)`
 
 Creates a resource-scoped limiter by:
@@ -22,6 +28,9 @@ Creates a resource-scoped limiter by:
 - choosing storage based on `RedisURL`,
 - creating per-resource child limiters that share one storage backend,
 - falling back to `DefaultPolicy` for resources not present in `Resources`.
+
+The default policy and every named override require positive limit and window
+values. Empty resource names are rejected.
 
 ## `core.Config`
 
@@ -179,3 +188,35 @@ The loader accepts either:
 
 - a flat top-level object, or
 - a nested `gorl` root object for namespaced configs.
+
+## Errors
+
+The core package exposes sentinel errors:
+
+- `core.ErrBackendUnavailable`,
+- `core.ErrConfigInvalid`,
+- `core.ErrUnknownStrategy`.
+
+Configuration validation wraps `ErrConfigInvalid`, so callers can use
+`errors.Is`. Backend implementations may return contextual errors from their
+underlying operations; middleware should log them through a custom error handler
+without exposing backend details to clients.
+
+## Package index
+
+| Package | Primary public role |
+| --- | --- |
+| `gorl` | `New` and `NewResourceLimiter` constructors |
+| `core` | Configuration, strategy, result, limiter, and metrics contracts |
+| `config` | JSON/YAML resource configuration loader |
+| `middleware/http` | Standard-library HTTP adapter and extractors |
+| `middleware/gin` | Gin adapter |
+| `middleware/fiber` | Fiber adapter |
+| `middleware/echo` | Echo adapter |
+| `metrics` | Prometheus collector implementation |
+| `storage` | Minimal custom storage interface |
+| `storage/inmem` | Bundled process-local storage |
+| `storage/redis` | Bundled Redis storage and client access |
+
+For exact signatures and Go documentation, open the
+[GoRL v2 module on pkg.go.dev](https://pkg.go.dev/github.com/AliRizaAynaci/gorl/v2).

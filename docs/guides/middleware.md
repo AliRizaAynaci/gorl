@@ -17,6 +17,29 @@ Resource-scoped middleware adds one more selection step:
 3. call `AllowResource(ctx, resource, key)`,
 4. write rate-limit headers and either forward or deny the request.
 
+```mermaid
+sequenceDiagram
+    accTitle: HTTP middleware decision sequence
+    accDescr: Middleware evaluates a request and either calls the application handler, returns a 429 denial, or returns a 500 error.
+    participant Client
+    participant Middleware
+    participant Limiter
+    participant Handler
+    Client->>Middleware: HTTP request
+    Middleware->>Limiter: Allow or AllowResource
+    alt allowed
+        Limiter-->>Middleware: Allowed=true + metadata
+        Middleware->>Handler: Continue
+        Handler-->>Client: Application response + headers
+    else denied
+        Limiter-->>Middleware: Allowed=false + retry metadata
+        Middleware-->>Client: 429 + headers
+    else limiter error
+        Limiter-->>Middleware: error
+        Middleware-->>Client: 500 by default
+    end
+```
+
 ## `net/http`
 
 ```go
@@ -80,6 +103,8 @@ handler := mw.RateLimitByResource(resourceLimiter, mw.Options{
 ### Important Note
 
 `middleware/http` expects `Options.KeyFunc` to be provided by the caller.
+Passing a zero-value `Options` causes a nil-function panic when a request is
+handled. Treat the key extractor as required constructor input.
 
 ## Gin
 
@@ -129,3 +154,16 @@ forcing zero-value duration headers into every response.
 
 Each middleware package allows a custom denied or error handler so applications
 can standardize response bodies and logging.
+
+## Production checklist
+
+- Derive keys only from authenticated or edge-normalized identity.
+- Prefer matched route patterns over raw paths when path parameters would create
+  high-cardinality resources.
+- Keep denied handlers cheap; they execute when the service is already under
+  pressure.
+- Do not expose Redis errors or credentials in client responses.
+- Decide whether rate limiting runs before or after authentication, tracing,
+  decompression, and other expensive middleware.
+- Verify header behavior through the actual reverse proxy or gateway because it
+  may remove or rewrite response headers.
