@@ -340,9 +340,434 @@ body {
   margin: 0;
 }
 
+.gorl-lock-page {
+  --gorl-lock-coral-soft: rgba(255, 86, 56, 0.09);
+  --gorl-lock-cyan-soft: rgba(55, 199, 233, 0.1);
+  --gorl-lock-panel: rgba(255, 255, 255, 0.76);
+}
+
+[data-md-color-scheme="slate"] .gorl-lock-page {
+  --gorl-lock-coral-soft: rgba(255, 111, 84, 0.12);
+  --gorl-lock-cyan-soft: rgba(55, 199, 233, 0.12);
+  --gorl-lock-panel: rgba(12, 27, 36, 0.84);
+}
+
+.gorl-lock-page .gorl-lock-hero {
+  background-color: var(--gorl-mist);
+  background-image: linear-gradient(rgba(8, 125, 154, 0.075) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(8, 125, 154, 0.075) 1px, transparent 1px);
+  background-size: 24px 24px;
+  border: 1px solid rgba(8, 125, 154, 0.2);
+  border-left: 0.32rem solid var(--gorl-coral);
+  border-radius: 0.85rem;
+  margin: 0.5rem 0 3rem;
+  overflow: hidden;
+  padding: clamp(1.35rem, 4vw, 3rem);
+}
+
+[data-md-color-scheme="slate"] .gorl-lock-page .gorl-lock-hero {
+  background-color: #0b1a23;
+  background-image: linear-gradient(rgba(55, 199, 233, 0.065) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(55, 199, 233, 0.065) 1px, transparent 1px);
+  border-color: rgba(55, 199, 233, 0.2);
+  border-left-color: var(--gorl-coral);
+}
+
+.gorl-lock-kicker,
+.gorl-lock-panel__eyebrow,
+.gorl-lock-release__tag,
+.gorl-lock-formula span {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.gorl-lock-kicker {
+  color: var(--gorl-cyan-deep);
+  margin: 0 0 0.7rem;
+}
+
+[data-md-color-scheme="slate"] .gorl-lock-kicker {
+  color: #65d8ef;
+}
+
+.gorl-lock-page .gorl-lock-hero h1 {
+  color: var(--gorl-night);
+  font-size: clamp(2.25rem, 7vw, 4.8rem);
+  letter-spacing: -0.06em;
+  line-height: 0.96;
+  margin: 0;
+  max-width: 12ch;
+}
+
+[data-md-color-scheme="slate"] .gorl-lock-page .gorl-lock-hero h1 {
+  color: #f3fcfd;
+}
+
+.gorl-lock-hero__copy > p:last-child {
+  color: var(--md-default-fg-color--light);
+  font-size: 0.98rem;
+  line-height: 1.65;
+  margin: 1rem 0 0;
+  max-width: 48rem;
+}
+
+.gorl-lock-release-rail {
+  display: grid;
+  gap: 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 2.6rem;
+}
+
+.gorl-lock-release {
+  border-top: 2px solid rgba(20, 35, 46, 0.22);
+  padding: 1.05rem 1rem 0 0;
+  position: relative;
+}
+
+[data-md-color-scheme="slate"] .gorl-lock-release {
+  border-top-color: rgba(164, 225, 237, 0.24);
+}
+
+.gorl-lock-release::before {
+  background: var(--gorl-ink);
+  border: 3px solid var(--gorl-mist);
+  border-radius: 50%;
+  content: "";
+  height: 0.7rem;
+  left: 0;
+  position: absolute;
+  top: -0.45rem;
+  width: 0.7rem;
+}
+
+[data-md-color-scheme="slate"] .gorl-lock-release::before {
+  background: #9adfee;
+  border-color: #0b1a23;
+}
+
+.gorl-lock-release--checkpoint::before {
+  background: var(--gorl-coral);
+}
+
+.gorl-lock-release--current {
+  border-top-color: var(--gorl-cyan-deep);
+}
+
+.gorl-lock-release--current::before {
+  background: var(--gorl-cyan);
+  box-shadow: 0 0 0 0.28rem rgba(55, 199, 233, 0.16);
+}
+
+.gorl-lock-release__tag {
+  color: var(--gorl-cyan-deep);
+  display: block;
+  margin-bottom: 0.45rem;
+}
+
+[data-md-color-scheme="slate"] .gorl-lock-release__tag {
+  color: #65d8ef;
+}
+
+.gorl-lock-release strong,
+.gorl-lock-release > span:last-child {
+  display: block;
+}
+
+.gorl-lock-release strong {
+  color: var(--gorl-ink);
+  font-size: 0.82rem;
+  margin-bottom: 0.28rem;
+}
+
+[data-md-color-scheme="slate"] .gorl-lock-release strong {
+  color: #effbfc;
+}
+
+.gorl-lock-release > span:last-child {
+  color: var(--md-default-fg-color--light);
+  font-size: 0.68rem;
+  line-height: 1.45;
+  max-width: 15rem;
+}
+
+.gorl-lock-board {
+  display: grid;
+  gap: 0.9rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 1.4rem 0 2.8rem;
+}
+
+.gorl-lock-panel {
+  background: var(--gorl-lock-panel);
+  border: 1px solid var(--gorl-line);
+  border-radius: 0.8rem;
+  overflow: hidden;
+  padding: clamp(1rem, 2.5vw, 1.4rem);
+}
+
+.gorl-lock-panel--before {
+  box-shadow: inset 0 0.2rem 0 var(--gorl-coral);
+}
+
+.gorl-lock-panel--after {
+  box-shadow: inset 0 0.2rem 0 var(--gorl-cyan);
+}
+
+.gorl-lock-panel > header {
+  align-items: flex-start;
+  display: flex;
+  gap: 0.6rem;
+  justify-content: space-between;
+}
+
+.gorl-lock-panel > header > div {
+  min-width: 0;
+}
+
+.gorl-lock-panel__eyebrow {
+  color: var(--md-default-fg-color--light);
+}
+
+.gorl-lock-page .gorl-lock-panel__name {
+  color: var(--gorl-ink);
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.25;
+  margin: 0.28rem 0 0;
+}
+
+[data-md-color-scheme="slate"] .gorl-lock-page .gorl-lock-panel__name {
+  color: #effbfc;
+}
+
+/* The hero title is a display element, not a section anchor. */
+.gorl-lock-page .gorl-lock-hero h1 .headerlink {
+  display: none;
+}
+
+.gorl-lock-panel__state {
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  color: var(--gorl-coral);
+  flex: 0 0 auto;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.58rem;
+  padding: 0.24rem 0.45rem;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.gorl-lock-panel--after .gorl-lock-panel__state {
+  color: var(--gorl-cyan-deep);
+}
+
+[data-md-color-scheme="slate"] .gorl-lock-panel--after .gorl-lock-panel__state {
+  color: #67dbf2;
+}
+
+.gorl-lock-diagram {
+  align-items: stretch;
+  display: grid;
+  gap: 0.4rem;
+  /* The panel is only ~14.3rem wide at Material's default grid, so fixed tracks
+     used to overflow and get clipped by the panel's overflow: hidden. Every
+     track is minmax(0, ...) so it can shrink instead, and the label tracks are
+     sized to their longest string ("shard 042", "tenant-a", "running") to leave
+     the widest possible lane for the animated flow line. */
+  grid-template-columns:
+    minmax(0, 3.2rem) minmax(1.4rem, 1fr) minmax(0, 3.3rem) minmax(0, 2.5rem);
+  margin: 1.4rem 0 1rem;
+  min-height: 7.6rem;
+}
+
+.gorl-lock-requests,
+.gorl-lock-paths,
+.gorl-lock-gates,
+.gorl-lock-outcomes {
+  display: grid;
+  gap: 0.48rem;
+  grid-template-rows: repeat(3, 1fr);
+  min-width: 0;
+}
+
+.gorl-lock-gate {
+  min-width: 0;
+}
+
+.gorl-lock-requests code {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--gorl-ink);
+  display: flex;
+  font-size: 0.62rem;
+  min-width: 0;
+  padding: 0;
+  white-space: nowrap;
+}
+
+[data-md-color-scheme="slate"] .gorl-lock-requests code {
+  color: #dff7fb;
+}
+
+.gorl-lock-paths span {
+  align-self: center;
+  background: var(--gorl-line);
+  display: block;
+  height: 1px;
+  position: relative;
+}
+
+.gorl-lock-panel--before .gorl-lock-paths span:nth-child(n + 2) {
+  background-image: repeating-linear-gradient(90deg, var(--gorl-coral) 0 3px, transparent 3px 7px);
+}
+
+.gorl-lock-gate,
+.gorl-lock-gates span {
+  align-items: center;
+  border-radius: 0.38rem;
+  display: flex;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.57rem;
+  font-weight: 600;
+  justify-content: center;
+  line-height: 1.3;
+  min-width: 0;
+  padding: 0 0.15rem;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.gorl-lock-gate--single {
+  background: var(--gorl-coral);
+  color: #fff;
+}
+
+.gorl-lock-gates span {
+  background: var(--gorl-lock-cyan-soft);
+  border: 1px solid rgba(8, 125, 154, 0.32);
+  color: var(--gorl-cyan-deep);
+}
+
+[data-md-color-scheme="slate"] .gorl-lock-gates span {
+  border-color: rgba(89, 214, 240, 0.32);
+  color: #85e4f6;
+}
+
+.gorl-lock-outcome {
+  align-items: center;
+  display: flex;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.54rem;
+  justify-content: flex-end;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.gorl-lock-outcome--run {
+  color: var(--gorl-cyan-deep);
+}
+
+.gorl-lock-outcome--wait {
+  color: var(--gorl-coral);
+}
+
+[data-md-color-scheme="slate"] .gorl-lock-outcome--run {
+  color: #72deF3;
+}
+
+.gorl-lock-panel--after .gorl-lock-paths i {
+  animation: gorl-lock-flow 2.8s ease-in-out infinite;
+  background: var(--gorl-cyan);
+  border-radius: 50%;
+  box-shadow: 0 0 0 0.2rem rgba(55, 199, 233, 0.12);
+  height: 0.38rem;
+  left: 0;
+  position: absolute;
+  top: -0.19rem;
+  width: 0.38rem;
+}
+
+.gorl-lock-panel--after .gorl-lock-paths span:nth-child(2) i {
+  animation-delay: -0.9s;
+}
+
+.gorl-lock-panel--after .gorl-lock-paths span:nth-child(3) i {
+  animation-delay: -1.8s;
+}
+
+@keyframes gorl-lock-flow {
+  0% { left: 0; opacity: 0; }
+  15% { opacity: 1; }
+  82% { left: calc(100% - 0.38rem); opacity: 1; }
+  100% { left: calc(100% - 0.38rem); opacity: 0; }
+}
+
+.gorl-lock-panel > p {
+  color: var(--md-default-fg-color--light);
+  font-size: 0.68rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.gorl-lock-formula {
+  align-items: stretch;
+  background: var(--gorl-night);
+  border: 1px solid rgba(55, 199, 233, 0.24);
+  border-radius: 0.72rem;
+  color: #dff9fd;
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: minmax(7rem, 1fr) auto minmax(9rem, 1.4fr) auto minmax(6rem, 0.8fr) auto minmax(6rem, 0.8fr);
+  margin: 1.2rem 0 1.5rem;
+  padding: 1rem;
+}
+
+.gorl-lock-formula > div {
+  min-width: 0;
+}
+
+.gorl-lock-formula span {
+  color: rgba(199, 243, 251, 0.48);
+  display: block;
+  margin-bottom: 0.32rem;
+}
+
+.gorl-lock-formula code {
+  background: transparent;
+  border: 0;
+  color: #bceff8;
+  display: block;
+  font-size: 0.62rem;
+  overflow-wrap: anywhere;
+  padding: 0;
+}
+
+.gorl-lock-formula b {
+  align-self: center;
+  color: var(--gorl-coral);
+  font-family: "IBM Plex Mono", monospace;
+}
+
 @media screen and (max-width: 76.1875em) {
   .gorl-hero {
     grid-template-columns: 1fr;
+  }
+
+  .gorl-lock-board {
+    grid-template-columns: 1fr;
+  }
+
+  .gorl-lock-formula {
+    grid-template-columns: 1fr;
+  }
+
+  .gorl-lock-formula b {
+    justify-self: center;
+    transform: rotate(90deg);
   }
 }
 
@@ -365,10 +790,56 @@ body {
   .gorl-strip {
     gap: 1rem;
   }
+
+  .gorl-lock-page .gorl-lock-hero {
+    border-radius: 0.68rem;
+    margin-inline: -0.4rem;
+    padding: 1.2rem;
+  }
+
+  .gorl-lock-release-rail {
+    grid-template-columns: 1fr;
+  }
+
+  .gorl-lock-release {
+    border-left: 2px solid rgba(20, 35, 46, 0.22);
+    border-top: 0;
+    padding: 0 0 1.2rem 1rem;
+  }
+
+  [data-md-color-scheme="slate"] .gorl-lock-release {
+    border-left-color: rgba(164, 225, 237, 0.24);
+  }
+
+  .gorl-lock-release::before {
+    left: -0.45rem;
+    top: 0;
+  }
+
+  .gorl-lock-release--current {
+    border-left-color: var(--gorl-cyan-deep);
+    padding-bottom: 0;
+  }
+
+  .gorl-lock-diagram {
+    gap: 0.3rem;
+    grid-template-columns:
+      minmax(0, 2.7rem) minmax(1rem, 1fr) minmax(0, 2.9rem) minmax(0, 2.2rem);
+  }
+
+  .gorl-lock-requests code,
+  .gorl-lock-gate,
+  .gorl-lock-gates span,
+  .gorl-lock-outcome {
+    font-size: 0.49rem;
+  }
+
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .gorl-card {
+  .gorl-card,
+  .gorl-lock-panel--after .gorl-lock-paths i {
+    animation: none;
     transition: none;
   }
 }

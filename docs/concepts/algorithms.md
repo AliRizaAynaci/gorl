@@ -93,9 +93,13 @@ GoRL does not provide that behavior.
 | Path | Concurrency behavior |
 | --- | --- |
 | In-memory fixed window | Atomic counter operations in the bundled store |
-| Other generic/in-memory strategies | Limiter-level synchronization around multi-step state changes |
+| Other generic/in-memory strategies | Key-sharded synchronization around multi-step state changes |
 | Bundled Redis backend | Algorithm-specific atomic Lua execution |
 | Custom `storage.Storage` | The interface operations apply, but bundled Redis script guarantees do not automatically transfer |
+
+Read [Concurrency and lock sharding](../architecture/concurrency.md) for the
+same-key correctness model, shard selection, memory trade-off, and measured
+parallel behavior.
 
 Read [Distributed semantics](../architecture/distributed-semantics.md) before
 using a custom store or shared deployment.
