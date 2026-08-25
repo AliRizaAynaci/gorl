@@ -55,5 +55,21 @@ jobs:
           name: coverage-report
           path: coverage.out
 
-      - name: Run benchmarks with memory profile
-        run: go test ./... -bench=. -benchmem -count=1 -v
+      - name: Run algorithm benchmarks
+        shell: bash
+        run: |
+          set -o pipefail
+          go test ./internal/algorithms \
+            -run=^$ \
+            -bench=. \
+            -benchmem \
+            -benchtime=1s \
+            -count=3 | tee benchmark-results.txt
+
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: benchmark-results.txt
+          if-no-files-found: ignore

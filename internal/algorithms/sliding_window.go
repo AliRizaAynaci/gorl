@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"sync"
 	"time"
 
 	"github.com/AliRizaAynaci/gorl/v2/core"
@@ -19,8 +18,9 @@ type SlidingWindowLimiter struct {
 	window   time.Duration
 	stateTTL time.Duration
 	store    storage.Storage
+	runner   redisScriptRunner
 	prefix   string
-	mu       sync.Mutex
+	locks    *shardedKeyLocker
 	metrics  core.MetricsCollector
 	failOpen bool
 }
@@ -32,7 +32,9 @@ func NewSlidingWindowLimiter(cfg core.Config, store storage.Storage) core.Limite
 		window:   cfg.Window,
 		stateTTL: 2 * cfg.Window,
 		store:    store,
+		runner:   resolveScriptRunner(store),
 		prefix:   "gorl:sw",
+		locks:    newShardedKeyLocker(),
 		metrics:  cfg.Metrics,
 		failOpen: cfg.FailOpen,
 	}
@@ -41,17 +43,18 @@ func NewSlidingWindowLimiter(cfg core.Config, store storage.Storage) core.Limite
 // Allow checks whether a request is allowed under a sliding window.
 func (s *SlidingWindowLimiter) Allow(ctx context.Context, key string) (core.Result, error) {
 	start := time.Now()
-	if runner, ok := s.store.(redisScriptRunner); ok {
-		return s.allowRedis(ctx, start, runner, key)
+	if s.runner != nil {
+		return s.allowRedis(ctx, start, s.runner, key)
 	}
 
 	// The generic path reads the counters, decides, and only then increments,
-	// which is not atomic across the store's Get/Incr calls. Serialize it like
-	// TokenBucketLimiter and LeakyBucketLimiter do so concurrent requests for the
-	// same key cannot both pass the check and admit over the limit. The redis
-	// path stays lock-free because its Lua script is already atomic.
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	// which is not atomic across the store's Get/Incr calls. Serialize requests
+	// that map to the same lock shard so same-key decisions remain correct while
+	// unrelated keys can make progress independently. The Redis path stays
+	// lock-free because its Lua script is already atomic.
+	keyLock := s.locks.mutexFor(key)
+	keyLock.Lock()
+	defer keyLock.Unlock()
 	return s.allowGeneric(ctx, start, key)
 }
 

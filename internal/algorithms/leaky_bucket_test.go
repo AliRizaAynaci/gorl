@@ -2,7 +2,6 @@ package algorithms
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -301,30 +300,21 @@ func TestLeakyBucket_ResultMetadata(t *testing.T) {
 }
 
 func BenchmarkLeakyBucket_SingleKey(b *testing.B) {
-	b.ReportAllocs()
-	store := inmem.NewInMemoryStore()
-	defer store.Close()
-	limiter := NewLeakyBucketLimiter(core.Config{
-		Limit: 100000, Window: time.Second, Metrics: &core.NoopMetrics{},
-	}, store)
-	ctx := context.Background()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		limiter.Allow(ctx, "bench")
-	}
+	benchmarkLimiterSequential(b, NewLeakyBucketLimiter, false)
 }
 
 func BenchmarkLeakyBucket_MultiKey(b *testing.B) {
-	b.ReportAllocs()
-	store := inmem.NewInMemoryStore()
-	defer store.Close()
-	limiter := NewLeakyBucketLimiter(core.Config{
-		Limit: 100000, Window: time.Second, Metrics: &core.NoopMetrics{},
-	}, store)
-	ctx := context.Background()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		key := fmt.Sprintf("user-%d", i%1000)
-		limiter.Allow(ctx, key)
-	}
+	benchmarkLimiterSequential(b, NewLeakyBucketLimiter, true)
+}
+
+func BenchmarkLeakyBucket_DeniedSingleKey(b *testing.B) {
+	benchmarkLimiterDenied(b, NewLeakyBucketLimiter)
+}
+
+func BenchmarkLeakyBucket_ParallelSingleKey(b *testing.B) {
+	benchmarkLimiterParallel(b, NewLeakyBucketLimiter, false)
+}
+
+func BenchmarkLeakyBucket_ParallelMultiKey(b *testing.B) {
+	benchmarkLimiterParallel(b, NewLeakyBucketLimiter, true)
 }

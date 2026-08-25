@@ -2,9 +2,6 @@ package algorithms
 
 import (
 	"context"
-	"fmt"
-	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -489,8 +486,8 @@ func TestSlidingWindow_GetPrevCountErrorInSameWindow(t *testing.T) {
 	}, store)
 	ctx := context.Background()
 
-	limiter.Allow(ctx, "k")                 // 1 Get(tsKey) + init
-	res, err := limiter.Allow(ctx, "k") 	// 1 Get(tsKey) succeeds, 1 Get(prevKey) fails
+	limiter.Allow(ctx, "k")             // 1 Get(tsKey) + init
+	res, err := limiter.Allow(ctx, "k") // 1 Get(tsKey) succeeds, 1 Get(prevKey) fails
 	if res.Allowed || err == nil {
 		t.Fatalf("expected Get(prevKey) error, got allowed=%v err=%v", res.Allowed, err)
 	}
@@ -504,8 +501,8 @@ func TestSlidingWindow_GetCurrCountErrorInSameWindow(t *testing.T) {
 	}, store)
 	ctx := context.Background()
 
-	limiter.Allow(ctx, "k")                 // 1 Get(tsKey), init path
-	res, err := limiter.Allow(ctx, "k") 	// 1 Get(tsKey), 1 Get(prevKey) ok, 1 Get(currKey) fails
+	limiter.Allow(ctx, "k")             // 1 Get(tsKey), init path
+	res, err := limiter.Allow(ctx, "k") // 1 Get(tsKey), 1 Get(prevKey) ok, 1 Get(currKey) fails
 	if res.Allowed || err == nil {
 		t.Fatalf("expected Get(currKey) error, got allowed=%v err=%v", res.Allowed, err)
 	}
@@ -522,67 +519,21 @@ func TestSlidingWindow_Close(t *testing.T) {
 }
 
 func BenchmarkSlidingWindow_SingleKey(b *testing.B) {
-	b.ReportAllocs()
-	store := inmem.NewInMemoryStore()
-	defer store.Close()
-	limiter := NewSlidingWindowLimiter(core.Config{
-		Limit: 100000, Window: time.Second, Metrics: &core.NoopMetrics{},
-	}, store)
-	ctx := context.Background()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		limiter.Allow(ctx, "bench")
-	}
+	benchmarkLimiterSequential(b, NewSlidingWindowLimiter, false)
 }
 
 func BenchmarkSlidingWindow_MultiKey(b *testing.B) {
-	b.ReportAllocs()
-	store := inmem.NewInMemoryStore()
-	defer store.Close()
-	limiter := NewSlidingWindowLimiter(core.Config{
-		Limit: 100000, Window: time.Second, Metrics: &core.NoopMetrics{},
-	}, store)
-	ctx := context.Background()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		key := fmt.Sprintf("user-%d", i%1000)
-		limiter.Allow(ctx, key)
-	}
+	benchmarkLimiterSequential(b, NewSlidingWindowLimiter, true)
 }
 
-// TestSlidingWindow_ConcurrentDoesNotExceedLimit is a regression test for the
-// missing lock on the generic (in-memory) path. Many goroutines hit the same
-// key inside a single window; with the read-check-then-Incr sequence unguarded,
-// they could all pass the check and admit well over the limit (and race on the
-// store). Run with -race to also catch the data race.
-func TestSlidingWindow_ConcurrentDoesNotExceedLimit(t *testing.T) {
-	store := inmem.NewInMemoryStore()
-	defer store.Close()
+func BenchmarkSlidingWindow_DeniedSingleKey(b *testing.B) {
+	benchmarkLimiterDenied(b, NewSlidingWindowLimiter)
+}
 
-	const limit = 50
-	limiter := NewSlidingWindowLimiter(core.Config{
-		// A long window so no rollover happens during the test: every request
-		// lands in the same window, so at most `limit` may be admitted.
-		Limit: limit, Window: time.Minute, Metrics: &core.NoopMetrics{},
-	}, store)
-	ctx := context.Background()
+func BenchmarkSlidingWindow_ParallelSingleKey(b *testing.B) {
+	benchmarkLimiterParallel(b, NewSlidingWindowLimiter, false)
+}
 
-	const goroutines = 500
-	var allowed int64
-	var wg sync.WaitGroup
-	wg.Add(goroutines)
-	for i := 0; i < goroutines; i++ {
-		go func() {
-			defer wg.Done()
-			res, err := limiter.Allow(ctx, "user-1")
-			if err == nil && res.Allowed {
-				atomic.AddInt64(&allowed, 1)
-			}
-		}()
-	}
-	wg.Wait()
-
-	if allowed > limit {
-		t.Fatalf("sliding window admitted %d concurrent requests, over the limit of %d", allowed, limit)
-	}
+func BenchmarkSlidingWindow_ParallelMultiKey(b *testing.B) {
+	benchmarkLimiterParallel(b, NewSlidingWindowLimiter, true)
 }
