@@ -2,7 +2,6 @@ package algorithms
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
@@ -520,30 +519,21 @@ func TestSlidingWindow_Close(t *testing.T) {
 }
 
 func BenchmarkSlidingWindow_SingleKey(b *testing.B) {
-	b.ReportAllocs()
-	store := inmem.NewInMemoryStore()
-	defer store.Close()
-	limiter := NewSlidingWindowLimiter(core.Config{
-		Limit: 100000, Window: time.Second, Metrics: &core.NoopMetrics{},
-	}, store)
-	ctx := context.Background()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		limiter.Allow(ctx, "bench")
-	}
+	benchmarkLimiterSequential(b, NewSlidingWindowLimiter, false)
 }
 
 func BenchmarkSlidingWindow_MultiKey(b *testing.B) {
-	b.ReportAllocs()
-	store := inmem.NewInMemoryStore()
-	defer store.Close()
-	limiter := NewSlidingWindowLimiter(core.Config{
-		Limit: 100000, Window: time.Second, Metrics: &core.NoopMetrics{},
-	}, store)
-	ctx := context.Background()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		key := fmt.Sprintf("user-%d", i%1000)
-		limiter.Allow(ctx, key)
-	}
+	benchmarkLimiterSequential(b, NewSlidingWindowLimiter, true)
+}
+
+func BenchmarkSlidingWindow_DeniedSingleKey(b *testing.B) {
+	benchmarkLimiterDenied(b, NewSlidingWindowLimiter)
+}
+
+func BenchmarkSlidingWindow_ParallelSingleKey(b *testing.B) {
+	benchmarkLimiterParallel(b, NewSlidingWindowLimiter, false)
+}
+
+func BenchmarkSlidingWindow_ParallelMultiKey(b *testing.B) {
+	benchmarkLimiterParallel(b, NewSlidingWindowLimiter, true)
 }

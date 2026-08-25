@@ -2,7 +2,6 @@ package algorithms
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
@@ -326,30 +325,21 @@ func TestTokenBucket_MetricsRecording(t *testing.T) {
 }
 
 func BenchmarkTokenBucket_SingleKey(b *testing.B) {
-	b.ReportAllocs()
-	store := inmem.NewInMemoryStore()
-	defer store.Close()
-	limiter := NewTokenBucketLimiter(core.Config{
-		Limit: 100000, Window: time.Second, Metrics: &core.NoopMetrics{},
-	}, store)
-	ctx := context.Background()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		limiter.Allow(ctx, "bench")
-	}
+	benchmarkLimiterSequential(b, NewTokenBucketLimiter, false)
 }
 
 func BenchmarkTokenBucket_MultiKey(b *testing.B) {
-	b.ReportAllocs()
-	store := inmem.NewInMemoryStore()
-	defer store.Close()
-	limiter := NewTokenBucketLimiter(core.Config{
-		Limit: 100000, Window: time.Second, Metrics: &core.NoopMetrics{},
-	}, store)
-	ctx := context.Background()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		key := fmt.Sprintf("user-%d", i%1000)
-		limiter.Allow(ctx, key)
-	}
+	benchmarkLimiterSequential(b, NewTokenBucketLimiter, true)
+}
+
+func BenchmarkTokenBucket_DeniedSingleKey(b *testing.B) {
+	benchmarkLimiterDenied(b, NewTokenBucketLimiter)
+}
+
+func BenchmarkTokenBucket_ParallelSingleKey(b *testing.B) {
+	benchmarkLimiterParallel(b, NewTokenBucketLimiter, false)
+}
+
+func BenchmarkTokenBucket_ParallelMultiKey(b *testing.B) {
+	benchmarkLimiterParallel(b, NewTokenBucketLimiter, true)
 }

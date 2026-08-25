@@ -2,7 +2,6 @@ package algorithms
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -204,30 +203,21 @@ func TestFixedWindow_ResultMetadata(t *testing.T) {
 
 // BenchmarkFixedWindow_SingleKey benchmarks the performance of the Fixed Window limiter with a single key.
 func BenchmarkFixedWindow_SingleKey(b *testing.B) {
-	b.ReportAllocs()
-	store := inmem.NewInMemoryStore()
-	defer store.Close()
-	limiter := NewFixedWindowLimiter(core.Config{
-		Limit: 100000, Window: time.Second, Metrics: &core.NoopMetrics{},
-	}, store)
-	ctx := context.Background()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		limiter.Allow(ctx, "bench")
-	}
+	benchmarkLimiterSequential(b, NewFixedWindowLimiter, false)
 }
 
 func BenchmarkFixedWindow_MultiKey(b *testing.B) {
-	b.ReportAllocs()
-	store := inmem.NewInMemoryStore()
-	defer store.Close()
-	limiter := NewFixedWindowLimiter(core.Config{
-		Limit: 100000, Window: time.Second, Metrics: &core.NoopMetrics{},
-	}, store)
-	ctx := context.Background()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		key := fmt.Sprintf("user-%d", i%1000)
-		limiter.Allow(ctx, key)
-	}
+	benchmarkLimiterSequential(b, NewFixedWindowLimiter, true)
+}
+
+func BenchmarkFixedWindow_DeniedSingleKey(b *testing.B) {
+	benchmarkLimiterDenied(b, NewFixedWindowLimiter)
+}
+
+func BenchmarkFixedWindow_ParallelSingleKey(b *testing.B) {
+	benchmarkLimiterParallel(b, NewFixedWindowLimiter, false)
+}
+
+func BenchmarkFixedWindow_ParallelMultiKey(b *testing.B) {
+	benchmarkLimiterParallel(b, NewFixedWindowLimiter, true)
 }
