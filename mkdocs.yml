@@ -127,6 +127,7 @@ nav:
   - Architecture:
       - System overview: architecture/system-overview.md
       - Request lifecycle: architecture/request-lifecycle.md
+      - Concurrency and lock sharding: architecture/concurrency.md
       - Distributed semantics: architecture/distributed-semantics.md
       - Package map: architecture/package-map.md
   - API Reference:
@@ -135,3 +136,4 @@ nav:
   - Contributing:
       - Contribute: contributing/index.md
       - Documentation style: contributing/docs-style.md
+      - Benchmarking methodology: contributing/benchmarking.md
