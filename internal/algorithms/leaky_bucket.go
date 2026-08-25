@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"sync"
 	"time"
 
 	"github.com/AliRizaAynaci/gorl/v2/core"
@@ -18,8 +17,9 @@ type LeakyBucketLimiter struct {
 	limit    int
 	window   time.Duration
 	store    storage.Storage
+	runner   redisScriptRunner
 	prefix   string
-	mu       sync.Mutex
+	locks    *shardedKeyLocker
 	metrics  core.MetricsCollector
 	failOpen bool
 }
@@ -30,7 +30,9 @@ func NewLeakyBucketLimiter(cfg core.Config, store storage.Storage) core.Limiter 
 		limit:    cfg.Limit,
 		window:   cfg.Window,
 		store:    store,
+		runner:   resolveScriptRunner(store),
 		prefix:   "gorl:lb",
+		locks:    newShardedKeyLocker(),
 		metrics:  cfg.Metrics,
 		failOpen: cfg.FailOpen,
 	}
@@ -39,12 +41,13 @@ func NewLeakyBucketLimiter(cfg core.Config, store storage.Storage) core.Limiter 
 // Allow checks and updates water level, allowing requests at a steady rate.
 func (l *LeakyBucketLimiter) Allow(ctx context.Context, key string) (core.Result, error) {
 	start := time.Now()
-	if runner, ok := l.store.(redisScriptRunner); ok {
-		return l.allowRedis(ctx, start, runner, key)
+	if l.runner != nil {
+		return l.allowRedis(ctx, start, l.runner, key)
 	}
 
-	l.mu.Lock()
-	defer l.mu.Unlock()
+	keyLock := l.locks.mutexFor(key)
+	keyLock.Lock()
+	defer keyLock.Unlock()
 	return l.allowGeneric(ctx, start, key)
 }
 

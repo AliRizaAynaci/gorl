@@ -6,10 +6,22 @@ import (
 	"time"
 
 	"github.com/AliRizaAynaci/gorl/v2/core"
+	"github.com/AliRizaAynaci/gorl/v2/storage"
 )
 
 type redisScriptRunner interface {
 	EvalScript(ctx context.Context, name string, keys []string, args ...int64) ([]int64, error)
+}
+
+// resolveScriptRunner reports whether the store executes decisions as atomic
+// Redis scripts. Limiters resolve this once at construction so the choice
+// between the Redis and generic paths is made in exactly one place.
+func resolveScriptRunner(store storage.Storage) redisScriptRunner {
+	runner, ok := store.(redisScriptRunner)
+	if !ok {
+		return nil
+	}
+	return runner
 }
 
 const (

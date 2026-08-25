@@ -4,7 +4,6 @@ package algorithms
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/AliRizaAynaci/gorl/v2/core"
@@ -17,8 +16,9 @@ type TokenBucketLimiter struct {
 	limit        int
 	window       time.Duration
 	store        storage.Storage
+	runner       redisScriptRunner
 	prefix       string
-	mu           sync.Mutex
+	locks        *shardedKeyLocker
 	metrics      core.MetricsCollector
 	timePerToken int64
 	failOpen     bool
@@ -34,7 +34,9 @@ func NewTokenBucketLimiter(cfg core.Config, store storage.Storage) core.Limiter 
 		limit:        cfg.Limit,
 		window:       cfg.Window,
 		store:        store,
+		runner:       resolveScriptRunner(store),
 		prefix:       "gorl:tb",
+		locks:        newShardedKeyLocker(),
 		metrics:      cfg.Metrics,
 		timePerToken: tpt,
 		failOpen:     cfg.FailOpen,
@@ -44,12 +46,13 @@ func NewTokenBucketLimiter(cfg core.Config, store storage.Storage) core.Limiter 
 // Allow checks token availability and consumes one token if allowed.
 func (t *TokenBucketLimiter) Allow(ctx context.Context, key string) (core.Result, error) {
 	start := time.Now()
-	if runner, ok := t.store.(redisScriptRunner); ok {
-		return t.allowRedis(ctx, start, runner, key)
+	if t.runner != nil {
+		return t.allowRedis(ctx, start, t.runner, key)
 	}
 
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	keyLock := t.locks.mutexFor(key)
+	keyLock.Lock()
+	defer keyLock.Unlock()
 	return t.allowGeneric(ctx, start, key)
 }
 
