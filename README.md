@@ -6,6 +6,13 @@
   <a href="https://alirizaaynaci.github.io/gorl/"><strong>Read the GoRL documentation →</strong></a>
 </p>
 
+<p align="center">
+  <a href="https://pkg.go.dev/github.com/AliRizaAynaci/gorl/v2"><img src="https://pkg.go.dev/badge/github.com/AliRizaAynaci/gorl/v2.svg" alt="Go Reference"/></a>
+  <a href="https://github.com/AliRizaAynaci/gorl/actions/workflows/ci.yml"><img src="https://github.com/AliRizaAynaci/gorl/actions/workflows/ci.yml/badge.svg?branch=main" alt="Go CI"/></a>
+  <a href="https://github.com/AliRizaAynaci/gorl/stargazers"><img src="https://img.shields.io/github/stars/AliRizaAynaci/gorl?style=flat-square&amp;logo=github" alt="GitHub stars"/></a>
+  <a href="https://github.com/AliRizaAynaci/gorl/blob/main/LICENSE"><img src="https://img.shields.io/github/license/AliRizaAynaci/gorl?style=flat-square" alt="License"/></a>
+</p>
+
 # GoRL - High-Performance Rate Limiter Library
 
 GoRL is a high-performance, extensible rate limiter library for Go. It supports multiple algorithms, pluggable storage backends, a metrics collector abstraction, and minimal dependencies for both single-instance deployments and Redis-backed shared-state deployments.
