@@ -7,6 +7,8 @@ repository today.
 
 ```mermaid
 flowchart TD
+    accTitle: GoRL system architecture
+    accDescr: Application constructors select algorithms and storage, while middleware and metrics connect the limiter to the host service.
     App[Application Code]
     Examples[Example Applications]
 

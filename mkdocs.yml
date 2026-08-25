@@ -1,0 +1,137 @@
+site_name: GoRL
+site_description: High-performance, production-minded rate limiting for Go
+site_url: https://alirizaaynaci.github.io/gorl/
+repo_url: https://github.com/AliRizaAynaci/gorl
+repo_name: AliRizaAynaci/gorl
+edit_uri: edit/main/docs/
+strict: true
+exclude_docs: |
+  README.md
+
+theme:
+  name: material
+  language: en
+  logo: assets/logo.png
+  favicon: assets/logo.png
+  font:
+    text: IBM Plex Sans
+    code: IBM Plex Mono
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.instant.prefetch
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - search.share
+    - content.action.edit
+    - content.action.view
+    - content.code.copy
+    - content.code.select
+    - content.tooltips
+
+plugins:
+  - search:
+      lang: en
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+      title: On this page
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets:
+      base_path:
+        - .
+      check_paths: true
+      restrict_base_path: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+
+extra_css:
+  - stylesheets/extra.css
+
+extra:
+  generator: false
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/AliRizaAynaci/gorl
+      name: GoRL on GitHub
+
+copyright: Copyright &copy; GoRL contributors — released under the MIT License
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Install and first limiter: guides/getting-started.md
+      - 60-second quickstart: guides/quickstart.md
+  - Concepts:
+      - Rate limiting model: concepts/rate-limiting.md
+      - Choose an algorithm: concepts/algorithms.md
+      - Keys and resources: concepts/keys-and-resources.md
+      - Results and HTTP headers: concepts/results-and-headers.md
+  - Guides:
+      - Middleware: guides/middleware.md
+      - Configuration files: guides/configuration.md
+      - Failure policy: guides/failure-policy.md
+      - Storage and observability: guides/storage-and-observability.md
+      - Redis in production: guides/redis-production.md
+      - Troubleshooting: guides/troubleshooting.md
+  - Examples:
+      - Overview: examples/index.md
+      - In-memory limiter: examples/in-memory.md
+      - Redis-backed limiter: examples/redis.md
+      - Resource-scoped limits: examples/resource-scoped.md
+      - Custom key extractor: examples/custom-extractor.md
+      - net/http middleware: examples/net-http.md
+      - Gin middleware: examples/gin.md
+      - Fiber middleware: examples/fiber.md
+      - Echo middleware: examples/echo.md
+      - Configuration file: examples/configuration-file.md
+      - Prometheus metrics: examples/prometheus.md
+  - Architecture:
+      - System overview: architecture/system-overview.md
+      - Request lifecycle: architecture/request-lifecycle.md
+      - Distributed semantics: architecture/distributed-semantics.md
+      - Package map: architecture/package-map.md
+  - API Reference:
+      - Public API: reference/public-api.md
+      - pkg.go.dev: https://pkg.go.dev/github.com/AliRizaAynaci/gorl/v2
+  - Contributing:
+      - Contribute: contributing/index.md
+      - Documentation style: contributing/docs-style.md

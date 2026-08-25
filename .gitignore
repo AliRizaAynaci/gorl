@@ -17,6 +17,8 @@ coverage_report.txt
 # Build / binary folders
 /bin/
 build/
+site/
+.venv-docs/
 
 # Dependency management
 /vendor/

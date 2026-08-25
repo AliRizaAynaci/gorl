@@ -71,6 +71,35 @@ We expect all contributors to adhere to our [Code of Conduct](./CODE_OF_CONDUCT.
 * Prefer table-driven tests for clarity and maintainability.
 * Mock external dependencies (e.g., Redis) or document integration test requirements clearly.
 
+## Documentation Development
+
+The documentation site uses MkDocs Material. Install the pinned dependencies in
+a virtual environment:
+
+```bash
+python3 -m venv .venv-docs
+source .venv-docs/bin/activate
+python -m pip install --requirement requirements-docs.txt
+```
+
+Run the local development server from the repository root:
+
+```bash
+mkdocs serve
+```
+
+Before opening a pull request, compile all Go examples and build the site with
+warnings treated as errors:
+
+```bash
+go test ./...
+mkdocs build --strict
+```
+
+Runnable documentation programs belong under `examples/`. Embed their source
+with `pymdownx.snippets` instead of copying Go code into Markdown so examples and
+the rendered site stay synchronized.
+
 ## Commit Messages
 
 We follow [Conventional Commits](https://www.conventionalcommits.org):

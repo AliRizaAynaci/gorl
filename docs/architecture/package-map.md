@@ -7,6 +7,8 @@ maintainers.
 
 ```mermaid
 flowchart LR
+    accTitle: GoRL package dependencies
+    accDescr: The public gorl package connects core contracts to algorithms, storage backends, middleware adapters, configuration, and metrics.
     gorl --> core
     gorl --> internalalg[internal/algorithms]
     gorl --> storage
